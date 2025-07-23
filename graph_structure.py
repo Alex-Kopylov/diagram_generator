@@ -3,21 +3,20 @@ import uuid
 
 
 class Node:
-    """Graph node with metadata"""
+    """Graph node"""
     
     @staticmethod
     def _rand_id():
         return uuid.uuid4().hex
     
-    def __init__(self, node_id: Optional[str] = None, metadata: Optional[Dict[str, Any]] = None):
+    def __init__(self, node_id: Optional[str] = None):
         self.id = node_id or self._rand_id()
-        self.metadata = metadata or {}
     
     def __str__(self):
         return f"Node({self.id})"
     
     def __repr__(self):
-        return f"Node(id='{self.id}', metadata={self.metadata})"
+        return f"Node(id='{self.id}')"
     
     def __eq__(self, other):
         return isinstance(other, Node) and self.id == other.id
@@ -27,23 +26,22 @@ class Node:
 
 
 class Edge:
-    """Graph edge with metadata"""
+    """Graph edge"""
     
     @staticmethod
     def _rand_id():
         return uuid.uuid4().hex
     
-    def __init__(self, source: Node, target: Node, metadata: Optional[Dict[str, Any]] = None):
+    def __init__(self, source: Node, target: Node):
         self.source = source
         self.target = target
-        self.metadata = metadata or {}
         self.id = self._rand_id()
     
     def __str__(self):
         return f"Edge({self.source.id} -> {self.target.id})"
     
     def __repr__(self):
-        return f"Edge(source={self.source.id}, target={self.target.id}, metadata={self.metadata})"
+        return f"Edge(source={self.source.id}, target={self.target.id})"
     
     def __eq__(self, other):
         return isinstance(other, Edge) and self.id == other.id
@@ -59,10 +57,9 @@ class Cluster:
     def _rand_id():
         return uuid.uuid4().hex
     
-    def __init__(self, name: str, nodes: Optional[Set[Node]] = None, metadata: Optional[Dict[str, Any]] = None):
+    def __init__(self, name: str, nodes: Optional[Set[Node]] = None):
         self.name = name
         self.nodes = nodes or set()
-        self.metadata = metadata or {}
         self.id = self._rand_id()
     
     def add_node(self, node: Node):
@@ -81,15 +78,14 @@ class Cluster:
         return f"Cluster({self.name})"
     
     def __repr__(self):
-        return f"Cluster(name='{self.name}', nodes={len(self.nodes)}, metadata={self.metadata})"
+        return f"Cluster(name='{self.name}', nodes={len(self.nodes)})"
 
 
 class Graph:
-    """Graph with name and metadata"""
+    """Graph with name"""
     
-    def __init__(self, name: str, metadata: Optional[Dict[str, Any]] = None):
+    def __init__(self, name: str):
         self.name = name
-        self.metadata = metadata or {}
         
         self._nodes: Set[Node] = set()
         self._edges: Set[Edge] = set()
@@ -147,41 +143,9 @@ class Graph:
         """Remove cluster from graph"""
         self._clusters.pop(cluster_name, None)
     
-    def get_neighbors(self, node: Node) -> Set[Node]:
-        """Get neighbors of node"""
-        if node not in self._adjacency:
-            return set()
-        return {edge.target for edge in self._adjacency[node]}
-    
     def get_edges_from(self, node: Node) -> Set[Edge]:
         """Get all edges from node"""
         return self._adjacency.get(node, set()).copy()
-    
-    def find_path(self, start: Node, end: Node) -> Optional[List[Node]]:
-        """Find path between nodes (BFS)"""
-        if start not in self._nodes or end not in self._nodes:
-            return None
-        
-        if start == end:
-            return [start]
-        
-        visited = set()
-        queue = [(start, [start])]
-        
-        while queue:
-            current, path = queue.pop(0)
-            if current in visited:
-                continue
-            
-            visited.add(current)
-            
-            for neighbor in self.get_neighbors(current):
-                if neighbor == end:
-                    return path + [neighbor]
-                if neighbor not in visited:
-                    queue.append((neighbor, path + [neighbor]))
-        
-        return None
     
     @property
     def nodes(self) -> Set[Node]:
@@ -218,15 +182,15 @@ class Graph:
                 f"edges={self.edge_count()}, clusters={self.cluster_count()})")
 
 
-# Пример использования
+# Example usage
 if __name__ == "__main__":
     # Create graph
-    graph = Graph("My Graph", {"description": "Example graph", "version": "1.0"})
+    graph = Graph("My Graph")
     
     # Create nodes
-    node1 = Node("A", {"type": "start", "value": 10})
-    node2 = Node("B", {"type": "middle", "value": 20})
-    node3 = Node("C", {"type": "end", "value": 30})
+    node1 = Node("A")
+    node2 = Node("B")
+    node3 = Node("C")
     
     # Add nodes to graph
     graph.add_node(node1)
@@ -234,15 +198,15 @@ if __name__ == "__main__":
     graph.add_node(node3)
     
     # Create edges
-    edge1 = Edge(node1, node2, {"weight": 1.5, "label": "first edge"})
-    edge2 = Edge(node2, node3, {"weight": 2.0, "label": "second edge"})
+    edge1 = Edge(node1, node2)
+    edge2 = Edge(node2, node3)
     
     # Add edges to graph
     graph.add_edge(edge1)
     graph.add_edge(edge2)
     
     # Create cluster
-    cluster1 = Cluster("Main Cluster", {node1, node2}, {"importance": "high"})
+    cluster1 = Cluster("Main Cluster", {node1, node2})
     graph.add_cluster(cluster1)
     
     # Graph information
@@ -251,10 +215,6 @@ if __name__ == "__main__":
     print(f"Edges: {graph.edge_count()}")
     print(f"Clusters: {graph.cluster_count()}")
     
-    # Path finding
-    path = graph.find_path(node1, node3)
-    print(f"Path from A to C: {[n.id for n in path] if path else 'Not found'}")
-    
-    # Node neighbors
-    neighbors = graph.get_neighbors(node1)
-    print(f"Neighbors of node A: {[n.id for n in neighbors]}")
+    # Node edges
+    edges = graph.get_edges_from(node1)
+    print(f"Edges from node A: {[e.id for e in edges]}")
