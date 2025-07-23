@@ -2,7 +2,8 @@
 
 from typing import List, Optional, Dict, Any
 from enum import Enum
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
+import importlib
 
 
 class OutputFormat(str, Enum):
@@ -22,11 +23,12 @@ class Direction(str, Enum):
     RIGHT_LEFT = "RL"
 
 
-class EdgeDirection(str, Enum):
-    """Edge connection types."""
-    RIGHT_TO_LEFT = ">>"
-    LEFT_TO_RIGHT = "<<"
-    UNDIRECTED = "-"
+class ConnectionType(str, Enum):
+    """Connection types for programmatic diagram construction."""
+    CONNECT = "connect"
+    FORWARD = "forward"
+    REVERSE = "reverse"
+    BIDIRECTIONAL = "both"
 
 
 class EdgeStyle(str, Enum):
@@ -77,37 +79,51 @@ class ErrorResponse(BaseModel):
 # Internal Models
 class NodeSpec(BaseModel):
     """Specification for creating a diagram node."""
-    provider: str = Field(..., description="Cloud provider (aws, gcp, azure, etc.)")
-    resource_type: str = Field(..., description="Resource category (compute, database, etc.)")
-    node_class: str = Field(..., description="Specific node class name")
+    diagrams_path: str = Field(..., description="Pythonic path like 'diagrams.aws.compute.EC2'")
     label: str = Field(..., description="Display label")
+    node_id: str = Field(..., description="Unique identifier for connections")
     cluster: Optional[str] = Field(default=None, description="Parent cluster name")
+    
+    @field_validator('diagrams_path')
+    @classmethod
+    def validate_diagrams_path(cls, v: str) -> str:
+        """Validate that the diagrams path exists in the library."""
+        try:
+            parts = v.split('.')
+            if len(parts) < 4 or parts[0] != 'diagrams':
+                raise ValueError("Path must start with 'diagrams.' and have at least 4 parts")
+            
+            module_path = '.'.join(parts[:-1])
+            class_name = parts[-1]
+            module = importlib.import_module(module_path)
+            
+            if not hasattr(module, class_name):
+                raise ValueError(f"Class {class_name} not found in {module_path}")
+            return v
+        except ImportError:
+            raise ValueError(f"Invalid diagrams path: {v}")
 
 
 class ClusterSpec(BaseModel):
     """Specification for creating a diagram cluster."""
     name: str = Field(..., description="Cluster name/label")
     parent_cluster: Optional[str] = Field(default=None, description="Parent cluster for nesting")
-    graph_attr: Optional[Dict[str, Any]] = Field(default=None, description="Custom attributes")
 
 
 class EdgeSpec(BaseModel):
-    """Specification for creating diagram edges."""
-    left_node: str = Field(..., description="Left node identifier")
-    right_node: str = Field(..., description="Right node identifier")
-    direction: EdgeDirection = Field(default=EdgeDirection.UNDIRECTED, description="Connection type")
+    """Specification for creating diagram connections."""
+    source_node_id: str = Field(..., description="Source node identifier")
+    target_node_id: str = Field(..., description="Target node identifier")
+    connection_type: ConnectionType = Field(default=ConnectionType.CONNECT, description="Connection type")
     label: Optional[str] = Field(default=None, description="Edge label")
     color: Optional[str] = Field(default=None, description="Edge color")
     style: EdgeStyle = Field(default=EdgeStyle.SOLID, description="Edge visual style")
 
 
 class DiagramSpec(BaseModel):
-    """Complete specification for a diagram."""
+    """Minimal specification for diagram creation."""
     name: str = Field(..., description="Diagram title")
-    output_format: OutputFormat = Field(default=OutputFormat.PNG, description="Output format")
-    filename: Optional[str] = Field(default=None, description="Custom filename")
     direction: Optional[Direction] = Field(default=None, description="Layout direction")
-    graph_attr: Optional[Dict[str, Any]] = Field(default=None, description="Custom attributes")
 
 
 class AgentState(BaseModel):
