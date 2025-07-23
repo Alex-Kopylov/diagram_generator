@@ -84,34 +84,34 @@ class Graph(BaseModel):
     
     name: str
     direction: Direction = Direction.TOP_BOTTOM
-    _nodes: Set[Node] = Field(default_factory=set, alias="nodes")
-    _edges: Set[Edge] = Field(default_factory=set, alias="edges")
-    _clusters: Dict[str, Cluster] = Field(default_factory=dict, alias="clusters")
-    _adjacency: Dict[Node, Set[Edge]] = Field(default_factory=dict, exclude=True)
+    nodes: Set[Node] = Field(default_factory=set)
+    edges: Set[Edge] = Field(default_factory=set)
+    clusters: Dict[str, Cluster] = Field(default_factory=dict)
+    adjacency: Dict[Node, Set[Edge]] = Field(default_factory=dict, exclude=True)
     
     model_config = {"populate_by_name": True}
     
     def add_node(self, node: Node):
         """Add node to graph"""
-        self._nodes.add(node)
-        if node not in self._adjacency:
-            self._adjacency[node] = set()
+        self.nodes.add(node)
+        if node not in self.adjacency:
+            self.adjacency[node] = set()
     
     def remove_node(self, node: Node):
         """Remove node from graph"""
-        if node in self._nodes:
+        if node in self.nodes:
             # Remove all edges connected to this node
-            edges_to_remove = [edge for edge in self._edges 
+            edges_to_remove = [edge for edge in self.edges 
                              if edge.source == node or edge.target == node]
             for edge in edges_to_remove:
                 self.remove_edge(edge)
             
             # Remove node from all clusters
-            for cluster in self._clusters.values():
+            for cluster in self.clusters.values():
                 cluster.remove_node(node)
             
-            self._nodes.remove(node)
-            self._adjacency.pop(node, None)
+            self.nodes.remove(node)
+            self.adjacency.pop(node, None)
     
     def add_edge(self, edge: Edge):
         """Add edge to graph"""
@@ -119,57 +119,42 @@ class Graph(BaseModel):
         self.add_node(edge.source)
         self.add_node(edge.target)
         
-        self._edges.add(edge)
-        self._adjacency[edge.source].add(edge)
+        self.edges.add(edge)
+        self.adjacency[edge.source].add(edge)
         
     
     def remove_edge(self, edge: Edge):
         """Remove edge from graph"""
-        if edge in self._edges:
-            self._edges.remove(edge)
-            self._adjacency[edge.source].discard(edge)
+        if edge in self.edges:
+            self.edges.remove(edge)
+            self.adjacency[edge.source].discard(edge)
     
     def add_cluster(self, cluster: Cluster):
         """Add cluster to graph"""
-        self._clusters[cluster.name] = cluster
+        self.clusters[cluster.name] = cluster
         # Add all cluster nodes to graph
         for node in cluster.nodes:
             self.add_node(node)
     
     def remove_cluster(self, cluster_name: str):
         """Remove cluster from graph"""
-        self._clusters.pop(cluster_name, None)
+        self.clusters.pop(cluster_name, None)
     
     def get_edges_from(self, node: Node) -> Set[Edge]:
         """Get all edges from node"""
-        return self._adjacency.get(node, set()).copy()
-    
-    @property
-    def nodes(self) -> Set[Node]:
-        """Get all nodes in graph"""
-        return self._nodes.copy()
-    
-    @property
-    def edges(self) -> Set[Edge]:
-        """Get all edges in graph"""
-        return self._edges.copy()
-    
-    @property
-    def clusters(self) -> Dict[str, Cluster]:
-        """Get all clusters in graph"""
-        return self._clusters.copy()
+        return self.adjacency.get(node, set()).copy()
     
     def node_count(self) -> int:
         """Number of nodes"""
-        return len(self._nodes)
+        return len(self.nodes)
     
     def edge_count(self) -> int:
         """Number of edges"""
-        return len(self._edges)
+        return len(self.edges)
     
     def cluster_count(self) -> int:
         """Number of clusters"""
-        return len(self._clusters)
+        return len(self.clusters)
     
     def __str__(self):
         return f"Graph({self.name})"
@@ -190,7 +175,7 @@ class Graph(BaseModel):
             cluster_nodes = {}
             
             # Create clusters first
-            for cluster_name, cluster in self._clusters.items():
+            for cluster_name, cluster in self.clusters.items():
                 with DiagramsCluster(cluster_name):
                     for node in cluster.nodes:
                         # Dynamically import and create node
@@ -202,7 +187,7 @@ class Graph(BaseModel):
                         cluster_nodes[node.id] = diagram_node
             
             # Create standalone nodes (not in clusters)
-            for node in self._nodes:
+            for node in self.nodes:
                 if node.id not in diagram_nodes:
                     # Dynamically import and create node
                     module_path, class_name = node.name.rsplit('.', 1)
@@ -212,7 +197,7 @@ class Graph(BaseModel):
                     diagram_nodes[node.id] = diagram_node
             
             # Create edges/connections
-            for edge in self._edges:
+            for edge in self.edges:
                 source_node = diagram_nodes[edge.source.id]
                 target_node = diagram_nodes[edge.target.id]
                 
