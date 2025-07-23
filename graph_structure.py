@@ -1,12 +1,16 @@
 from typing import Dict, List, Set, Any, Optional
-from uuid import uuid4
+import uuid
 
 
 class Node:
     """Graph node with metadata"""
     
+    @staticmethod
+    def _rand_id():
+        return uuid.uuid4().hex
+    
     def __init__(self, node_id: Optional[str] = None, metadata: Optional[Dict[str, Any]] = None):
-        self.id = node_id or str(uuid4())
+        self.id = node_id or self._rand_id()
         self.metadata = metadata or {}
     
     def __str__(self):
@@ -25,11 +29,15 @@ class Node:
 class Edge:
     """Graph edge with metadata"""
     
+    @staticmethod
+    def _rand_id():
+        return uuid.uuid4().hex
+    
     def __init__(self, source: Node, target: Node, metadata: Optional[Dict[str, Any]] = None):
         self.source = source
         self.target = target
         self.metadata = metadata or {}
-        self.id = str(uuid4())
+        self.id = self._rand_id()
     
     def __str__(self):
         return f"Edge({self.source.id} -> {self.target.id})"
@@ -47,11 +55,15 @@ class Edge:
 class Cluster:
     """Cluster of nodes"""
     
+    @staticmethod
+    def _rand_id():
+        return uuid.uuid4().hex
+    
     def __init__(self, name: str, nodes: Optional[Set[Node]] = None, metadata: Optional[Dict[str, Any]] = None):
         self.name = name
         self.nodes = nodes or set()
         self.metadata = metadata or {}
-        self.id = str(uuid4())
+        self.id = self._rand_id()
     
     def add_node(self, node: Node):
         """Add node to cluster"""
@@ -75,10 +87,9 @@ class Cluster:
 class Graph:
     """Graph with name and metadata"""
     
-    def __init__(self, name: str, metadata: Optional[Dict[str, Any]] = None, directed: bool = True):
+    def __init__(self, name: str, metadata: Optional[Dict[str, Any]] = None):
         self.name = name
         self.metadata = metadata or {}
-        self.directed = directed
         
         self._nodes: Set[Node] = set()
         self._edges: Set[Edge] = set()
@@ -118,23 +129,12 @@ class Graph:
         self._edges.add(edge)
         self._adjacency[edge.source].add(edge)
         
-        # For undirected graph, add reverse edge
-        if not self.directed and edge.source != edge.target:
-            reverse_edge = Edge(edge.target, edge.source, edge.metadata.copy())
-            self._adjacency[edge.target].add(reverse_edge)
     
     def remove_edge(self, edge: Edge):
         """Remove edge from graph"""
         if edge in self._edges:
             self._edges.remove(edge)
             self._adjacency[edge.source].discard(edge)
-            
-            if not self.directed:
-                # Remove reverse edge for undirected graph
-                reverse_edges = [e for e in self._adjacency[edge.target] 
-                               if e.source == edge.target and e.target == edge.source]
-                for rev_edge in reverse_edges:
-                    self._adjacency[edge.target].discard(rev_edge)
     
     def add_cluster(self, cluster: Cluster):
         """Add cluster to graph"""
