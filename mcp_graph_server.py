@@ -342,53 +342,29 @@ async def handle_list_tools() -> List[Tool]:
 
 @server.call_tool()
 async def handle_call_tool(name: str, arguments: Dict[str, Any]) -> Sequence[TextContent | ImageContent | EmbeddedResource]:
-    """Handle tool calls for graph construction using match-case pattern."""
+    """Handle tool calls for graph construction using a mapping pattern."""
+    
+    # Tool handler mapping
+    tool_handlers = {
+        "create_node": (CreateNodeInput, handle_create_node),
+        "create_edge": (CreateEdgeInput, handle_create_edge),
+        "create_cluster": (CreateClusterInput, handle_create_cluster),
+        "build_graph": (BuildGraphInput, handle_build_graph),
+        "add_to_graph": (AddToGraphInput, handle_add_to_graph),
+        "validate_graph": (ValidateGraphInput, handle_validate_graph),
+        "graph_to_json": (GraphToJsonInput, handle_graph_to_json),
+        "generate_diagram": (GenerateDiagramInput, handle_generate_diagram),
+    }
     
     try:
-        match name:
-            case "create_node":
-                input_data = CreateNodeInput.model_validate(arguments)
-                result = await handle_create_node(input_data)
-                return [TextContent(type="text", text=result.model_dump_json(indent=2))]
-            
-            case "create_edge":
-                input_data = CreateEdgeInput.model_validate(arguments)
-                result = await handle_create_edge(input_data)
-                return [TextContent(type="text", text=result.model_dump_json(indent=2))]
-            
-            case "create_cluster":
-                input_data = CreateClusterInput.model_validate(arguments)
-                result = await handle_create_cluster(input_data)
-                return [TextContent(type="text", text=result.model_dump_json(indent=2))]
-            
-            case "build_graph":
-                input_data = BuildGraphInput.model_validate(arguments)
-                result = await handle_build_graph(input_data)
-                return [TextContent(type="text", text=result.model_dump_json(indent=2))]
-            
-            case "add_to_graph":
-                input_data = AddToGraphInput.model_validate(arguments)
-                result = await handle_add_to_graph(input_data)
-                return [TextContent(type="text", text=result.model_dump_json(indent=2))]
-            
-            case "validate_graph":
-                input_data = ValidateGraphInput.model_validate(arguments)
-                result = await handle_validate_graph(input_data)
-                return [TextContent(type="text", text=result.model_dump_json(indent=2))]
-            
-            case "graph_to_json":
-                input_data = GraphToJsonInput.model_validate(arguments)
-                result = await handle_graph_to_json(input_data)
-                return [TextContent(type="text", text=result.model_dump_json(indent=2))]
-            
-            case "generate_diagram":
-                input_data = GenerateDiagramInput.model_validate(arguments)
-                result = await handle_generate_diagram(input_data)
-                return [TextContent(type="text", text=result.model_dump_json(indent=2))]
-            
-            case _:
-                error_result = ErrorResult(error=f"Unknown tool: {name}")
-                return [TextContent(type="text", text=error_result.model_dump_json(indent=2))]
+        if name not in tool_handlers:
+            error_result = ErrorResult(error=f"Unknown tool: {name}")
+            return [TextContent(type="text", text=error_result.model_dump_json(indent=2))]
+        
+        input_model, handler_func = tool_handlers[name]
+        input_data = input_model.model_validate(arguments)
+        result = await handler_func(input_data)
+        return [TextContent(type="text", text=result.model_dump_json(indent=2))]
     
     except Exception as e:
         error_result = ErrorResult(error=f"Tool execution failed: {str(e)}")
