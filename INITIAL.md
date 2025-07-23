@@ -146,6 +146,24 @@ with Diagram("Microservices Architecture", show=False):
   - `direction`: Layout direction (TB, BT, LR, RL)
   - `graph_attr`: Custom Graphviz attributes (optional)
 
+**Tool Call Examples:**
+```python
+# Basic diagram initialization
+create_diagram(name="My Web Application", outformat="png")
+
+# Diagram with custom layout and filename
+create_diagram(
+    name="Microservices Architecture", 
+    outformat="svg",
+    filename="microservices_diagram",
+    direction="LR"
+)
+
+# Generated code output:
+# with Diagram("My Web Application", show=False, filename="my_web_application"):
+#     # diagram content here
+```
+
 ### 2. Create Node Tool
 - **Purpose**: Create individual nodes representing system components
 - **Parameters**:
@@ -155,12 +173,59 @@ with Diagram("Microservices Architecture", show=False):
   - `label`: Display label for the node
   - `cluster`: Parent cluster name (optional)
 
+**Tool Call Examples:**
+```python
+# AWS EC2 instance
+create_node(
+    provider="aws",
+    resource_type="compute", 
+    node_class="EC2",
+    label="Web Server 1"
+)
+
+# Node inside a cluster
+create_node(
+    provider="aws",
+    resource_type="database",
+    node_class="RDS", 
+    label="Main Database",
+    cluster="Data Tier"
+)
+
+# Generated code output:
+# from diagrams.aws.compute import EC2
+# from diagrams.aws.database import RDS
+# web_server_1 = EC2("Web Server 1")
+# main_database = RDS("Main Database")  # inside cluster context
+```
+
 ### 3. Create Cluster Tool
 - **Purpose**: Group nodes into logical clusters
 - **Parameters**:
   - `name`: Cluster label
   - `parent_cluster`: Parent cluster for nesting (optional)
   - `graph_attr`: Custom cluster attributes (optional)
+
+**Tool Call Examples:**
+```python
+# Basic cluster
+create_cluster(name="Web Tier")
+
+# Nested cluster with custom attributes
+create_cluster(
+    name="Database Layer",
+    parent_cluster="Backend Services",
+    graph_attr={"style": "filled", "color": "lightblue"}
+)
+
+# Generated code output:
+# with Cluster("Web Tier"):
+#     # nodes will be added here
+#
+# with Cluster("Backend Services"):
+#     with Cluster("Database Layer", graph_attr={"style": "filled", "color": "lightblue"}):
+#         # nested nodes here
+```
 
 ### 4. Create Edge Tool
 - **Purpose**: Connect nodes with directional or undirected edges
@@ -172,6 +237,26 @@ with Diagram("Microservices Architecture", show=False):
   - `color`: Edge color (optional)
   - `style`: Edge style (solid, dashed, dotted, bold)
 
+**Tool Call Examples:**
+```python
+# Simple directional connection
+create_edge(from_node="load_balancer", to_node="web_servers", direction=">>")
+
+# Labeled edge with styling
+create_edge(
+    from_node="api_gateway",
+    to_node="auth_service", 
+    direction=">>",
+    label="Authentication requests",
+    color="blue",
+    style="dashed"
+)
+
+# Generated code output:
+# load_balancer >> web_servers
+# api_gateway >> Edge(label="Authentication requests", color="blue", style="dashed") >> auth_service
+```
+
 ### 5. Search Node Tool
 - **Purpose**: Find available node types across providers
 - **Parameters**:
@@ -179,6 +264,36 @@ with Diagram("Microservices Architecture", show=False):
   - `provider`: Filter by provider (aws, gcp, azure, etc.)
   - `category`: Filter by category (compute, database, network, etc.)
 - **Returns**: List of available node types with their import paths
+
+**Tool Call Examples:**
+```python
+# Search for database services
+search_node(query="database")
+
+# Search AWS compute services
+search_node(query="compute", provider="aws")
+
+# Search for load balancer across all providers
+search_node(query="load balancer")
+
+# Example return format:
+# [
+#   {
+#     "provider": "aws",
+#     "category": "database", 
+#     "node_class": "RDS",
+#     "import_path": "diagrams.aws.database.RDS",
+#     "description": "Amazon Relational Database Service"
+#   },
+#   {
+#     "provider": "gcp",
+#     "category": "database",
+#     "node_class": "SQL", 
+#     "import_path": "diagrams.gcp.database.SQL",
+#     "description": "Google Cloud SQL"
+#   }
+# ]
+```
 
 ## DOCUMENTATION:
 
