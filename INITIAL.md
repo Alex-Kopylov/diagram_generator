@@ -8,11 +8,13 @@ RESTful Diagram Generation Service
 
 ## AGENT ARCHITECTURE:
 
-The service uses an intelligent agent that plans and executes diagram creation through a set of specialized tools. The agent:
+The service uses LangGraph as the LLM framework to orchestrate an intelligent agent that plans and executes diagram creation through a set of specialized tools. The agent:
 
-1. **Plans** the diagram structure based on the natural language description
-2. **Executes** the plan using available tools in a structured sequence
+1. **Plans** the diagram structure based on the natural language description using LangGraph's workflow capabilities
+2. **Executes** the plan using available tools in a structured sequence with LangGraph's tool calling and state transitions
 3. **Returns** the generated diagram without exposing underlying Python code
+
+**Note**: LangGraph uses "State" as its internal framework concept for managing workflow state, but this is different from the service's stateless requirement. The service itself remains stateless (no user sessions, no database persistence) while using LangGraph's stateless runs feature for each request.
 
 ### Available Tools:
 
@@ -181,7 +183,8 @@ with Diagram("Microservices Architecture", show=False):
 ## DOCUMENTATION:
 
 - FastAPI – https://fastapi.tiangolo.com/
-- OpenAI Python SDK – https://platform.openai.com/docs/api-reference
+- LangGraph – https://langchain-ai.github.io/langgraph/
+- LangGraph Stateless Runs – https://langchain-ai.github.io/langgraph/cloud/how-tos/stateless_runs/
 - python-dotenv – https://pypi.org/project/python-dotenv/
 - Diagrams – https://diagrams.mingrammer.com/docs
 - Diagrams Nodes Reference – https://diagrams.mingrammer.com/docs/nodes/aws (AWS), https://diagrams.mingrammer.com/docs/nodes/gcp (GCP), https://diagrams.mingrammer.com/docs/nodes/azure (Azure)
@@ -201,10 +204,11 @@ with Diagram("Microservices Architecture", show=False):
 - Aim for high test coverage with pytest and hypothesis where appropriate.
 - The service must remain stateless—no user sessions and no database persistence.
 - Containerize the application with both a **Dockerfile** and a **docker-compose.yml** for seamless local orchestration.
-- Build agent(s) that wrap the `diagrams` package as an opaque set of tools for the LLM; do **not** instruct the LLM to reference the library directly.
+- Build agent(s) using LangGraph that wrap the `diagrams` package as an opaque set of tools for the LLM; do **not** instruct the LLM to reference the library directly.
   - Agents must support at least three node types across **AWS**, **Azure**, and **GCP** to provide multi-cloud diagram capabilities.
-  - The service should use the agent's tools to create diagrams based on natural language descriptions, then execute the tool sequence to produce PNG/SVG images.
-- Integrate with an external LLM API (e.g., **OpenAI**). All prompt logic must be explicit and visible in code—no hidden framework calls.
+  - The service should use LangGraph's workflow orchestration to create diagrams based on natural language descriptions, then execute the tool sequence to produce PNG/SVG images.
+  - Use LangGraph's stateless runs feature to ensure each request is processed independently without persistent state.
+- Integrate with an external LLM API (e.g., **OpenAI**) through LangGraph's LLM integration. All prompt logic must be explicit and visible in code—no hidden framework calls.
 - (Bonus) The `/assistant` endpoint may maintain helpful context and ephemeral memory to improve multi-turn interactions.
 - Provide comprehensive unit tests, ensuring LLM invocations are mocked to allow offline CI runs.
 - Maintain clear project structure, modularity, and clean, well-documented code throughout the service.
