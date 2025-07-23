@@ -1,7 +1,7 @@
-from typing import Dict, List, Set, Any, Optional
+from typing import Dict, Set
 from enum import Enum
 import uuid
-import json
+from pydantic import BaseModel, Field
 
 
 class Direction(str, Enum):
@@ -12,16 +12,11 @@ class Direction(str, Enum):
     RIGHT_LEFT = "RL"
 
 
-class Node:
+class Node(BaseModel):
     """Graph node"""
     
-    @staticmethod
-    def _rand_id():
-        return uuid.uuid4().hex
-    
-    def __init__(self, name: str, node_id: Optional[str] = None):
-        self.name = name
-        self.id = node_id or self._rand_id()
+    name: str
+    id: str = Field(default_factory=lambda: uuid.uuid4().hex)
     
     def __str__(self):
         return f"Node({self.name})"
@@ -34,35 +29,16 @@ class Node:
     
     def __hash__(self):
         return hash(self.id)
-    
-    def to_json(self) -> str:
-        """Convert node to JSON string."""
-        data = {
-            "id": self.id,
-            "name": self.name
-        }
-        return json.dumps(data)
-    
-    @classmethod
-    def from_json(cls, json_str: str) -> 'Node':
-        """Create node from JSON string."""
-        data = json.loads(json_str)
-        return cls(data["name"], data["id"])
 
 
-class Edge:
+class Edge(BaseModel):
     """Graph edge"""
     
-    @staticmethod
-    def _rand_id():
-        return uuid.uuid4().hex
-    
-    def __init__(self, source: Node, target: Node, forward: bool = False, reverse: bool = False):
-        self.source = source
-        self.target = target
-        self.forward = forward
-        self.reverse = reverse
-        self.id = self._rand_id()
+    source: Node
+    target: Node
+    forward: bool = False
+    reverse: bool = False
+    id: str = Field(default_factory=lambda: uuid.uuid4().hex)
     
     def __str__(self):
         return f"Edge({self.source.id} -> {self.target.id})"
@@ -75,40 +51,14 @@ class Edge:
     
     def __hash__(self):
         return hash(self.id)
-    
-    def to_json(self) -> str:
-        """Convert edge to JSON string."""
-        data = {
-            "id": self.id,
-            "source": json.loads(self.source.to_json()),
-            "target": json.loads(self.target.to_json()),
-            "forward": self.forward,
-            "reverse": self.reverse
-        }
-        return json.dumps(data)
-    
-    @classmethod
-    def from_json(cls, json_str: str) -> 'Edge':
-        """Create edge from JSON string."""
-        data = json.loads(json_str)
-        source = Node.from_json(json.dumps(data["source"]))
-        target = Node.from_json(json.dumps(data["target"]))
-        edge = cls(source, target, data["forward"], data["reverse"])
-        edge.id = data["id"]  # Preserve original ID
-        return edge
 
 
-class Cluster:
+class Cluster(BaseModel):
     """Cluster of nodes"""
     
-    @staticmethod
-    def _rand_id():
-        return uuid.uuid4().hex
-    
-    def __init__(self, name: str, nodes: Optional[Set[Node]] = None):
-        self.name = name
-        self.nodes = nodes or set()
-        self.id = self._rand_id()
+    name: str
+    nodes: Set[Node] = Field(default_factory=set)
+    id: str = Field(default_factory=lambda: uuid.uuid4().hex)
     
     def add_node(self, node: Node):
         """Add node to cluster"""
@@ -127,39 +77,19 @@ class Cluster:
     
     def __repr__(self):
         return f"Cluster(name='{self.name}', nodes={len(self.nodes)})"
-    
-    def to_json(self) -> str:
-        """Convert cluster to JSON string."""
-        data = {
-            "id": self.id,
-            "name": self.name,
-            "nodes": [json.loads(node.to_json()) for node in self.nodes]
-        }
-        return json.dumps(data)
-    
-    @classmethod
-    def from_json(cls, json_str: str) -> 'Cluster':
-        """Create cluster from JSON string."""
-        data = json.loads(json_str)
-        nodes = {Node.from_json(json.dumps(node_data)) for node_data in data["nodes"]}
-        cluster = cls(data["name"], nodes)
-        cluster.id = data["id"]  # Preserve original ID
-        return cluster
 
 
-class Graph:
+class Graph(BaseModel):
     """Graph with name"""
     
-    def __init__(self, name: str, direction: Direction = Direction.TOP_BOTTOM):
-        self.name = name
-        self.direction = direction
-        
-        self._nodes: Set[Node] = set()
-        self._edges: Set[Edge] = set()
-        self._clusters: Dict[str, Cluster] = {}
-        
-        # For fast edge lookup
-        self._adjacency: Dict[Node, Set[Edge]] = {}
+    name: str
+    direction: Direction = Direction.TOP_BOTTOM
+    _nodes: Set[Node] = Field(default_factory=set, alias="nodes")
+    _edges: Set[Edge] = Field(default_factory=set, alias="edges")
+    _clusters: Dict[str, Cluster] = Field(default_factory=dict, alias="clusters")
+    _adjacency: Dict[Node, Set[Edge]] = Field(default_factory=dict, exclude=True)
+    
+    model_config = {"populate_by_name": True}
     
     def add_node(self, node: Node):
         """Add node to graph"""
@@ -303,95 +233,52 @@ class Graph:
         
         return diagram
     
-    def to_json(self) -> str:
-        """Convert graph to JSON string."""
-        data = {
-            "name": self.name,
-            "direction": self.direction.value,
-            "nodes": [json.loads(node.to_json()) for node in self._nodes],
-            "edges": [json.loads(edge.to_json()) for edge in self._edges],
-            "clusters": [json.loads(cluster.to_json()) for cluster in self._clusters.values()]
-        }
-        return json.dumps(data, indent=2)
-    
-    @classmethod
-    def from_json(cls, json_str: str) -> 'Graph':
-        """Create graph from JSON string."""
-        data = json.loads(json_str)
-        
-        # Create graph
-        direction = Direction(data["direction"])
-        graph = cls(data["name"], direction)
-        
-        # Create nodes
-        nodes_by_id = {}
-        for node_data in data["nodes"]:
-            node = Node.from_json(json.dumps(node_data))
-            nodes_by_id[node.id] = node
-            graph.add_node(node)
-        
-        # Create edges
-        for edge_data in data["edges"]:
-            edge = Edge.from_json(json.dumps(edge_data))
-            # Update edge nodes to use the ones in our graph
-            edge.source = nodes_by_id[edge.source.id]
-            edge.target = nodes_by_id[edge.target.id]
-            graph.add_edge(edge)
-        
-        # Create clusters
-        for cluster_data in data["clusters"]:
-            cluster = Cluster.from_json(json.dumps(cluster_data))
-            # Update cluster nodes to use the ones in our graph
-            cluster.nodes = {nodes_by_id[node.id] for node in cluster.nodes}
-            graph.add_cluster(cluster)
-        
-        return graph
 
 
 # Test: Microservices Architecture Simulation
 if __name__ == "__main__":
     # Create microservices architecture graph
-    graph = Graph("Microservices Architecture", Direction.LEFT_RIGHT)
+    graph = Graph(name="Microservices Architecture", direction=Direction.LEFT_RIGHT)
     
-    # Create nodes for components
-    api_gateway = Node("diagrams.aws.network.APIGateway", "API Gateway")
-    auth_service = Node("diagrams.aws.compute.EC2", "Auth Service")
-    payment_service = Node("diagrams.aws.compute.EC2", "Payment Service")
-    order_service = Node("diagrams.aws.compute.EC2", "Order Service")
-    sqs_queue = Node("diagrams.aws.integration.SQS", "SQS Queue")
-    database = Node("diagrams.aws.database.RDS", "Shared RDS")
-    monitoring = Node("diagrams.aws.management.Cloudwatch", "Monitoring")
+    # Create nodes for components (using node_id parameter instead of second positional arg)
+    api_gateway = Node(name="diagrams.aws.network.APIGateway", id="API Gateway")
+    auth_service = Node(name="diagrams.aws.compute.EC2", id="Auth Service")
+    payment_service = Node(name="diagrams.aws.compute.EC2", id="Payment Service")
+    order_service = Node(name="diagrams.aws.compute.EC2", id="Order Service")
+    sqs_queue = Node(name="diagrams.aws.integration.SQS", id="SQS Queue")
+    database = Node(name="diagrams.aws.database.RDS", id="Shared RDS")
+    monitoring = Node(name="diagrams.aws.management.Cloudwatch", id="Monitoring")
     
     # Add all nodes to graph
     for node in [api_gateway, auth_service, payment_service, order_service, sqs_queue, database, monitoring]:
         graph.add_node(node)
     
     # Create microservices cluster
-    microservices_cluster = Cluster("Microservices")
+    microservices_cluster = Cluster(name="Microservices")
     microservices_cluster.add_node(auth_service)
     microservices_cluster.add_node(payment_service)
     microservices_cluster.add_node(order_service)
     graph.add_cluster(microservices_cluster)
     
     # Create edges (connections) - API Gateway to services
-    graph.add_edge(Edge(api_gateway, auth_service, forward=True))
-    graph.add_edge(Edge(api_gateway, payment_service, forward=True))
-    graph.add_edge(Edge(api_gateway, order_service, forward=True))
+    graph.add_edge(Edge(source=api_gateway, target=auth_service, forward=True))
+    graph.add_edge(Edge(source=api_gateway, target=payment_service, forward=True))
+    graph.add_edge(Edge(source=api_gateway, target=order_service, forward=True))
     
     # Services to SQS queue
-    graph.add_edge(Edge(auth_service, sqs_queue, forward=True))
-    graph.add_edge(Edge(payment_service, sqs_queue, forward=True))
-    graph.add_edge(Edge(order_service, sqs_queue, forward=True))
+    graph.add_edge(Edge(source=auth_service, target=sqs_queue, forward=True))
+    graph.add_edge(Edge(source=payment_service, target=sqs_queue, forward=True))
+    graph.add_edge(Edge(source=order_service, target=sqs_queue, forward=True))
     
     # Services to database
-    graph.add_edge(Edge(auth_service, database, forward=True))
-    graph.add_edge(Edge(payment_service, database, forward=True))
-    graph.add_edge(Edge(order_service, database, forward=True))
+    graph.add_edge(Edge(source=auth_service, target=database, forward=True))
+    graph.add_edge(Edge(source=payment_service, target=database, forward=True))
+    graph.add_edge(Edge(source=order_service, target=database, forward=True))
     
     # Monitoring to services
-    graph.add_edge(Edge(monitoring, auth_service, forward=True))
-    graph.add_edge(Edge(monitoring, payment_service, forward=True))
-    graph.add_edge(Edge(monitoring, order_service, forward=True))
+    graph.add_edge(Edge(source=monitoring, target=auth_service, forward=True))
+    graph.add_edge(Edge(source=monitoring, target=payment_service, forward=True))
+    graph.add_edge(Edge(source=monitoring, target=order_service, forward=True))
     
     # Display graph information
     print(f"Graph: {graph}")
@@ -403,5 +290,14 @@ if __name__ == "__main__":
     # Test edge connectivity
     api_edges = graph.get_edges_from(api_gateway)
     print(f"API Gateway connects to {len(api_edges)} services")
+    
+    # Test JSON serialization
+    json_data = graph.model_dump_json(indent=2)
+    print("JSON serialization works!")
+    
+    # Test JSON deserialization
+    graph_from_json = Graph.model_validate_json(json_data)
+    print(f"Deserialized graph: {graph_from_json}")
+    
     graph.to_diagrams()
     print("Microservices architecture simulation completed!")
