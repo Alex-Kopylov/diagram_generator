@@ -6,15 +6,10 @@ A stateless MCP server providing tools for constructing and manipulating
 graph diagrams using the existing graph_structure.py classes.
 """
 
-import asyncio
-from typing import Any, Dict, List, Sequence, Optional, Union
+from typing import Any, Dict, List, Optional, Union
 
-from mcp.server import Server
-from mcp.server.models import InitializationOptions
-from mcp.server.stdio import stdio_server
-from mcp.types import Tool, TextContent, ImageContent, EmbeddedResource
+from mcp.server.fastmcp import FastMCP
 from pydantic import BaseModel, Field
-
 from graph_structure import Node, Edge, Cluster, Graph, Direction
 
 
@@ -42,7 +37,7 @@ class CreateClusterInput(BaseModel):
 class BuildGraphInput(BaseModel):
     """Input schema for building a complete graph."""
     name: str = Field(..., description="Graph name")
-    direction: Direction = Field(Direction.TOP_BOTTOM, description="Graph layout direction")
+    direction: Direction = Field(Direction.LEFT_RIGHT, description="Graph layout direction")
     nodes: List[Node] = Field(..., description="Array of node objects")
     edges: List[Union[Edge, Dict[str, Any]]] = Field(..., description="Array of edge objects or edge data")
     clusters: Optional[List[Union[Cluster, Dict[str, Any]]]] = Field(None, description="Array of cluster objects or cluster data")
@@ -112,8 +107,8 @@ class ErrorResult(BaseModel):
     error: str = Field(..., description="Error message describing what went wrong")
 
 
-# Initialize the MCP server
-server = Server("graph-construction")
+# Initialize the FastMCP server
+mcp = FastMCP("graph-construction")
 
 
 # Tool Handler Functions
@@ -293,98 +288,62 @@ async def handle_generate_diagram(input_data: GenerateDiagramInput) -> DiagramRe
         return DiagramResult(success=False, file_path=None, error=str(e))
 
 
-@server.list_tools()
-async def handle_list_tools() -> List[Tool]:
-    """List available graph construction tools."""
-    return [
-        Tool(
-            name="create_node",
-            description="Create a new graph node",
-            inputSchema=CreateNodeInput.model_json_schema()
-        ),
-        Tool(
-            name="create_edge",
-            description="Create a new graph edge between nodes",
-            inputSchema=CreateEdgeInput.model_json_schema()
-        ),
-        Tool(
-            name="create_cluster",
-            description="Create a cluster containing specified nodes",
-            inputSchema=CreateClusterInput.model_json_schema()
-        ),
-        Tool(
-            name="build_graph",
-            description="Build a complete graph from components",
-            inputSchema=BuildGraphInput.model_json_schema()
-        ),
-        Tool(
-            name="add_to_graph",
-            description="Add components to an existing graph",
-            inputSchema=AddToGraphInput.model_json_schema()
-        ),
-        Tool(
-            name="validate_graph",
-            description="Validate graph structure and connections",
-            inputSchema=ValidateGraphInput.model_json_schema()
-        ),
-        Tool(
-            name="graph_to_json",
-            description="Convert graph to JSON string",
-            inputSchema=GraphToJsonInput.model_json_schema()
-        ),
-        Tool(
-            name="generate_diagram",
-            description="Generate diagram file from graph",
-            inputSchema=GenerateDiagramInput.model_json_schema()
-        )
-    ]
+# Tool registrations using FastMCP decorators
+@mcp.tool()
+async def create_node(name: str, id: Optional[str] = None) -> Node:
+    """Create a new graph node."""
+    input_data = CreateNodeInput(name=name, id=id)
+    return await handle_create_node(input_data)
 
 
-@server.call_tool()
-async def handle_call_tool(name: str, arguments: Dict[str, Any]) -> Sequence[TextContent | ImageContent | EmbeddedResource]:
-    """Handle tool calls for graph construction using a mapping pattern."""
-    
-    # Tool handler mapping
-    tool_handlers = {
-        "create_node": (CreateNodeInput, handle_create_node),
-        "create_edge": (CreateEdgeInput, handle_create_edge),
-        "create_cluster": (CreateClusterInput, handle_create_cluster),
-        "build_graph": (BuildGraphInput, handle_build_graph),
-        "add_to_graph": (AddToGraphInput, handle_add_to_graph),
-        "validate_graph": (ValidateGraphInput, handle_validate_graph),
-        "graph_to_json": (GraphToJsonInput, handle_graph_to_json),
-        "generate_diagram": (GenerateDiagramInput, handle_generate_diagram),
-    }
-    
-    try:
-        if name not in tool_handlers:
-            error_result = ErrorResult(error=f"Unknown tool: {name}")
-            return [TextContent(type="text", text=error_result.model_dump_json(indent=2))]
-        
-        input_model, handler_func = tool_handlers[name]
-        input_data = input_model.model_validate(arguments)
-        result = await handler_func(input_data)
-        return [TextContent(type="text", text=result.model_dump_json(indent=2))]
-    
-    except Exception as e:
-        error_result = ErrorResult(error=f"Tool execution failed: {str(e)}")
-        return [TextContent(type="text", text=error_result.model_dump_json(indent=2))]
+@mcp.tool()
+async def create_edge(source_id: str, target_id: str, forward: bool = False, reverse: bool = False) -> EdgeData:
+    """Create a new graph edge between nodes."""
+    input_data = CreateEdgeInput(source_id=source_id, target_id=target_id, forward=forward, reverse=reverse)
+    return await handle_create_edge(input_data)
 
 
-async def main():
-    """Run the MCP server."""
-    # Run the server using stdin/stdout streams
-    async with stdio_server() as (read_stream, write_stream):
-        await server.run(
-            read_stream,
-            write_stream,
-            InitializationOptions(
-                server_name="graph-construction",
-                server_version="1.0.0",
-                capabilities=server.get_capabilities(),
-            ),
-        )
+@mcp.tool()
+async def create_cluster(name: str, node_ids: List[str]) -> ClusterData:
+    """Create a cluster containing specified nodes."""
+    input_data = CreateClusterInput(name=name, node_ids=node_ids)
+    return await handle_create_cluster(input_data)
+
+
+@mcp.tool()
+async def build_graph(name: str, direction: Direction, nodes: List[Node], edges: List[Union[Edge, Dict[str, Any]]], clusters: Optional[List[Union[Cluster, Dict[str, Any]]]] = None) -> Graph:
+    """Build a complete graph from components."""
+    input_data = BuildGraphInput(name=name, direction=direction, nodes=nodes, edges=edges, clusters=clusters)
+    return await handle_build_graph(input_data)
+
+
+@mcp.tool()
+async def add_to_graph(graph: Graph, nodes: Optional[List[Node]] = None, edges: Optional[List[Union[Edge, Dict[str, Any]]]] = None, clusters: Optional[List[Union[Cluster, Dict[str, Any]]]] = None) -> Graph:
+    """Add components to an existing graph."""
+    input_data = AddToGraphInput(graph=graph, nodes=nodes, edges=edges, clusters=clusters)
+    return await handle_add_to_graph(input_data)
+
+
+@mcp.tool()
+async def validate_graph(graph: Graph) -> ValidationResult:
+    """Validate graph structure and connections."""
+    input_data = ValidateGraphInput(graph=graph)
+    return await handle_validate_graph(input_data)
+
+
+@mcp.tool()
+async def graph_to_json(graph: Graph) -> JsonResult:
+    """Convert graph to JSON string."""
+    input_data = GraphToJsonInput(graph=graph)
+    return await handle_graph_to_json(input_data)
+
+
+@mcp.tool()
+async def generate_diagram(graph: Graph, output_file: Optional[str] = None) -> DiagramResult:
+    """Generate diagram file from graph."""
+    input_data = GenerateDiagramInput(graph=graph, output_file=output_file)
+    return await handle_generate_diagram(input_data)
 
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    mcp.run()
