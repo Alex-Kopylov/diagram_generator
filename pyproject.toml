@@ -28,6 +28,14 @@ dev = [
     "mypy>=1.7.1",
 ]
 
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+include = ["diagram_agent*"]
+exclude = ["docker*", "tests*", "scripts*", "examples*"]
+
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
