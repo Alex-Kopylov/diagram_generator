@@ -44,7 +44,7 @@ class DiagramRequest(BaseModel):
     """Request model for diagram generation."""
     description: str = Field(..., description="Natural language description of the diagram")
     output_format: OutputFormat = Field(default=OutputFormat.PNG, description="Output format")
-    direction: Optional[Direction] = Field(default=None, description="Layout direction")
+    direction: Optional[Direction] = Field(default=Direction.LEFT_RIGHT, description="Layout direction")
 
 
 class AssistantRequest(BaseModel):
@@ -107,7 +107,7 @@ class NodeSpec(BaseModel):
 class ClusterSpec(BaseModel):
     """Specification for creating a diagram cluster."""
     name: str = Field(..., description="Cluster name/label")
-    parent_cluster: Optional[str] = Field(default=None, description="Parent cluster for nesting")
+    label: Optional[str] = Field(default=None, description="Cluster display label")
 
 
 class EdgeSpec(BaseModel):

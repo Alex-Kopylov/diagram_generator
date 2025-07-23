@@ -1,6 +1,7 @@
 from typing import Dict, List, Set, Any, Optional
 from enum import Enum
 import uuid
+import json
 
 
 class Direction(str, Enum):
@@ -33,6 +34,20 @@ class Node:
     
     def __hash__(self):
         return hash(self.id)
+    
+    def to_json(self) -> str:
+        """Convert node to JSON string."""
+        data = {
+            "id": self.id,
+            "name": self.name
+        }
+        return json.dumps(data)
+    
+    @classmethod
+    def from_json(cls, json_str: str) -> 'Node':
+        """Create node from JSON string."""
+        data = json.loads(json_str)
+        return cls(data["name"], data["id"])
 
 
 class Edge:
@@ -60,6 +75,27 @@ class Edge:
     
     def __hash__(self):
         return hash(self.id)
+    
+    def to_json(self) -> str:
+        """Convert edge to JSON string."""
+        data = {
+            "id": self.id,
+            "source": json.loads(self.source.to_json()),
+            "target": json.loads(self.target.to_json()),
+            "forward": self.forward,
+            "reverse": self.reverse
+        }
+        return json.dumps(data)
+    
+    @classmethod
+    def from_json(cls, json_str: str) -> 'Edge':
+        """Create edge from JSON string."""
+        data = json.loads(json_str)
+        source = Node.from_json(json.dumps(data["source"]))
+        target = Node.from_json(json.dumps(data["target"]))
+        edge = cls(source, target, data["forward"], data["reverse"])
+        edge.id = data["id"]  # Preserve original ID
+        return edge
 
 
 class Cluster:
@@ -91,6 +127,24 @@ class Cluster:
     
     def __repr__(self):
         return f"Cluster(name='{self.name}', nodes={len(self.nodes)})"
+    
+    def to_json(self) -> str:
+        """Convert cluster to JSON string."""
+        data = {
+            "id": self.id,
+            "name": self.name,
+            "nodes": [json.loads(node.to_json()) for node in self.nodes]
+        }
+        return json.dumps(data)
+    
+    @classmethod
+    def from_json(cls, json_str: str) -> 'Cluster':
+        """Create cluster from JSON string."""
+        data = json.loads(json_str)
+        nodes = {Node.from_json(json.dumps(node_data)) for node_data in data["nodes"]}
+        cluster = cls(data["name"], nodes)
+        cluster.id = data["id"]  # Preserve original ID
+        return cluster
 
 
 class Graph:
@@ -232,20 +286,66 @@ class Graph:
                 source_node = diagram_nodes[edge.source.id]
                 target_node = diagram_nodes[edge.target.id]
                 
-                if edge.forward and edge.reverse:
-                    # Bidirectional
-                    source_node - target_node
-                elif edge.forward:
-                    # Forward direction
-                    source_node >> target_node
-                elif edge.reverse:
-                    # Reverse direction
-                    source_node << target_node
-                else:
-                    # Default connection
-                    source_node - target_node
+                match (edge.forward, edge.reverse):
+                    case (True, True):
+                        # Bidirectional - create Edge with both directions
+                        from diagrams import Edge as DiagramEdge
+                        source_node - DiagramEdge(forward=True, reverse=True) - target_node
+                    case (True, False):
+                        # Forward direction
+                        source_node >> target_node
+                    case (False, True):
+                        # Reverse direction  
+                        source_node << target_node
+                    case (False, False):
+                        # No direction
+                        source_node - target_node
         
         return diagram
+    
+    def to_json(self) -> str:
+        """Convert graph to JSON string."""
+        data = {
+            "name": self.name,
+            "direction": self.direction.value,
+            "nodes": [json.loads(node.to_json()) for node in self._nodes],
+            "edges": [json.loads(edge.to_json()) for edge in self._edges],
+            "clusters": [json.loads(cluster.to_json()) for cluster in self._clusters.values()]
+        }
+        return json.dumps(data, indent=2)
+    
+    @classmethod
+    def from_json(cls, json_str: str) -> 'Graph':
+        """Create graph from JSON string."""
+        data = json.loads(json_str)
+        
+        # Create graph
+        direction = Direction(data["direction"])
+        graph = cls(data["name"], direction)
+        
+        # Create nodes
+        nodes_by_id = {}
+        for node_data in data["nodes"]:
+            node = Node.from_json(json.dumps(node_data))
+            nodes_by_id[node.id] = node
+            graph.add_node(node)
+        
+        # Create edges
+        for edge_data in data["edges"]:
+            edge = Edge.from_json(json.dumps(edge_data))
+            # Update edge nodes to use the ones in our graph
+            edge.source = nodes_by_id[edge.source.id]
+            edge.target = nodes_by_id[edge.target.id]
+            graph.add_edge(edge)
+        
+        # Create clusters
+        for cluster_data in data["clusters"]:
+            cluster = Cluster.from_json(json.dumps(cluster_data))
+            # Update cluster nodes to use the ones in our graph
+            cluster.nodes = {nodes_by_id[node.id] for node in cluster.nodes}
+            graph.add_cluster(cluster)
+        
+        return graph
 
 
 # Test: Microservices Architecture Simulation
