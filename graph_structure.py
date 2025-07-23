@@ -1,5 +1,14 @@
 from typing import Dict, List, Set, Any, Optional
+from enum import Enum
 import uuid
+
+
+class Direction(str, Enum):
+    """Diagram layout directions."""
+    TOP_BOTTOM = "TB"
+    BOTTOM_TOP = "BT"
+    LEFT_RIGHT = "LR"
+    RIGHT_LEFT = "RL"
 
 
 class Node:
@@ -9,14 +18,15 @@ class Node:
     def _rand_id():
         return uuid.uuid4().hex
     
-    def __init__(self, node_id: Optional[str] = None):
+    def __init__(self, name: str, node_id: Optional[str] = None):
+        self.name = name
         self.id = node_id or self._rand_id()
     
     def __str__(self):
-        return f"Node({self.id})"
+        return f"Node({self.name})"
     
     def __repr__(self):
-        return f"Node(id='{self.id}')"
+        return f"Node(name='{self.name}', id='{self.id}')"
     
     def __eq__(self, other):
         return isinstance(other, Node) and self.id == other.id
@@ -32,9 +42,11 @@ class Edge:
     def _rand_id():
         return uuid.uuid4().hex
     
-    def __init__(self, source: Node, target: Node):
+    def __init__(self, source: Node, target: Node, forward: bool = False, reverse: bool = False):
         self.source = source
         self.target = target
+        self.forward = forward
+        self.reverse = reverse
         self.id = self._rand_id()
     
     def __str__(self):
@@ -84,8 +96,9 @@ class Cluster:
 class Graph:
     """Graph with name"""
     
-    def __init__(self, name: str):
+    def __init__(self, name: str, direction: Direction = Direction.TOP_BOTTOM):
         self.name = name
+        self.direction = direction
         
         self._nodes: Set[Node] = set()
         self._edges: Set[Edge] = set()
@@ -178,43 +191,117 @@ class Graph:
         return f"Graph({self.name})"
     
     def __repr__(self):
-        return (f"Graph(name='{self.name}', nodes={self.node_count()}, "
+        return (f"Graph(name='{self.name}', direction='{self.direction}', nodes={self.node_count()}, "
                 f"edges={self.edge_count()}, clusters={self.cluster_count()})")
+    
+    def to_diagrams(self):
+        """Convert to mingrammer/diagrams format"""
+        import importlib
+        from diagrams import Diagram, Cluster as DiagramsCluster
+        
+        # Create diagram with direction
+        with Diagram(self.name, direction=self.direction.value, show=False) as diagram:
+            # Dictionary to store created nodes for edge connections
+            diagram_nodes = {}
+            cluster_nodes = {}
+            
+            # Create clusters first
+            for cluster_name, cluster in self._clusters.items():
+                with DiagramsCluster(cluster_name):
+                    for node in cluster.nodes:
+                        # Dynamically import and create node
+                        module_path, class_name = node.name.rsplit('.', 1)
+                        module = importlib.import_module(module_path)
+                        node_class = getattr(module, class_name)
+                        diagram_node = node_class(node.id)
+                        diagram_nodes[node.id] = diagram_node
+                        cluster_nodes[node.id] = diagram_node
+            
+            # Create standalone nodes (not in clusters)
+            for node in self._nodes:
+                if node.id not in diagram_nodes:
+                    # Dynamically import and create node
+                    module_path, class_name = node.name.rsplit('.', 1)
+                    module = importlib.import_module(module_path)
+                    node_class = getattr(module, class_name)
+                    diagram_node = node_class(node.id)
+                    diagram_nodes[node.id] = diagram_node
+            
+            # Create edges/connections
+            for edge in self._edges:
+                source_node = diagram_nodes[edge.source.id]
+                target_node = diagram_nodes[edge.target.id]
+                
+                if edge.forward and edge.reverse:
+                    # Bidirectional
+                    source_node - target_node
+                elif edge.forward:
+                    # Forward direction
+                    source_node >> target_node
+                elif edge.reverse:
+                    # Reverse direction
+                    source_node << target_node
+                else:
+                    # Default connection
+                    source_node - target_node
+        
+        return diagram
 
 
-# Example usage
+# Test: Microservices Architecture Simulation
 if __name__ == "__main__":
-    # Create graph
-    graph = Graph("My Graph")
+    # Create microservices architecture graph
+    graph = Graph("Microservices Architecture", Direction.LEFT_RIGHT)
     
-    # Create nodes
-    node1 = Node("A")
-    node2 = Node("B")
-    node3 = Node("C")
+    # Create nodes for components
+    api_gateway = Node("diagrams.aws.network.APIGateway", "API Gateway")
+    auth_service = Node("diagrams.aws.compute.EC2", "Auth Service")
+    payment_service = Node("diagrams.aws.compute.EC2", "Payment Service")
+    order_service = Node("diagrams.aws.compute.EC2", "Order Service")
+    sqs_queue = Node("diagrams.aws.integration.SQS", "SQS Queue")
+    database = Node("diagrams.aws.database.RDS", "Shared RDS")
+    monitoring = Node("diagrams.aws.management.Cloudwatch", "Monitoring")
     
-    # Add nodes to graph
-    graph.add_node(node1)
-    graph.add_node(node2)
-    graph.add_node(node3)
+    # Add all nodes to graph
+    for node in [api_gateway, auth_service, payment_service, order_service, sqs_queue, database, monitoring]:
+        graph.add_node(node)
     
-    # Create edges
-    edge1 = Edge(node1, node2)
-    edge2 = Edge(node2, node3)
+    # Create microservices cluster
+    microservices_cluster = Cluster("Microservices")
+    microservices_cluster.add_node(auth_service)
+    microservices_cluster.add_node(payment_service)
+    microservices_cluster.add_node(order_service)
+    graph.add_cluster(microservices_cluster)
     
-    # Add edges to graph
-    graph.add_edge(edge1)
-    graph.add_edge(edge2)
+    # Create edges (connections) - API Gateway to services
+    graph.add_edge(Edge(api_gateway, auth_service, forward=True))
+    graph.add_edge(Edge(api_gateway, payment_service, forward=True))
+    graph.add_edge(Edge(api_gateway, order_service, forward=True))
     
-    # Create cluster
-    cluster1 = Cluster("Main Cluster", {node1, node2})
-    graph.add_cluster(cluster1)
+    # Services to SQS queue
+    graph.add_edge(Edge(auth_service, sqs_queue, forward=True))
+    graph.add_edge(Edge(payment_service, sqs_queue, forward=True))
+    graph.add_edge(Edge(order_service, sqs_queue, forward=True))
     
-    # Graph information
+    # Services to database
+    graph.add_edge(Edge(auth_service, database, forward=True))
+    graph.add_edge(Edge(payment_service, database, forward=True))
+    graph.add_edge(Edge(order_service, database, forward=True))
+    
+    # Monitoring to services
+    graph.add_edge(Edge(monitoring, auth_service, forward=True))
+    graph.add_edge(Edge(monitoring, payment_service, forward=True))
+    graph.add_edge(Edge(monitoring, order_service, forward=True))
+    
+    # Display graph information
     print(f"Graph: {graph}")
     print(f"Nodes: {graph.node_count()}")
     print(f"Edges: {graph.edge_count()}")
     print(f"Clusters: {graph.cluster_count()}")
+    print(f"Microservices cluster nodes: {len(microservices_cluster.nodes)}")
     
-    # Node edges
-    edges = graph.get_edges_from(node1)
-    print(f"Edges from node A: {[e.id for e in edges]}")
+    # Test edge connectivity
+    api_edges = graph.get_edges_from(api_gateway)
+    print(f"API Gateway connects to {len(api_edges)} services")
+    graph.to_diagrams()
+    print("Microservices architecture simulation completed!")
