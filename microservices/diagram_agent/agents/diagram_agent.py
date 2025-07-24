@@ -9,7 +9,6 @@ import time
 from typing import Dict, Any, Optional
 from typing_extensions import TypedDict
 from langgraph.graph import StateGraph, START, END
-from langgraph.prebuilt import create_react_agent
 
 from langchain_core.messages import HumanMessage, SystemMessage, AIMessage, ToolMessage, BaseMessage
 from pydantic import BaseModel, Field
@@ -23,7 +22,7 @@ from langchain.chat_models import init_chat_model
 settings = get_settings()
 
 
-class DiagramState(TypedDict):
+class DiagramState(BaseModel):
     """
     Represents the state of the diagram generation workflow.
     
@@ -36,13 +35,13 @@ class DiagramState(TypedDict):
         file_path: Path to generated diagram file
         graph_data: Graph data used for diagram generation
     """
-    message: str
-    plan: Optional[str]
-    result: Optional[str]
-    success: bool
-    error: Optional[str]
-    file_path: Optional[str]
-    graph_data: Optional[Dict[str, Any]]
+    message: str = Field(..., description="Original user message describing the diagram")
+    plan: Optional[str] = Field(None, description="Generated execution plan from the planner")
+    result: Optional[str] = Field(None, description="Final result from the executor")
+    success: bool = Field(..., description="Whether the workflow completed successfully")
+    error: Optional[str] = Field(None, description="Error message if workflow failed")
+    file_path: Optional[str] = Field(None, description="Path to generated diagram file")
+    graph_data: Optional[Dict[str, Any]] = Field(None, description="Graph data used for diagram")
 
 
 class DiagramGenerationResult(BaseModel):
@@ -111,56 +110,39 @@ def executor_node(state: DiagramState) -> DiagramState:
     try:
         if not state.get("plan"):
             logger.error("No plan available for execution")
-            return {
-                **state,
-                "success": False,
-                "error": "No plan available for execution"
-            }
+            state.update(success=False, error="No plan available for execution")
+            return state
         
-        # Initialize executor agent
+        # Initialize executor LLM
         llm = init_chat_model(model=settings.model_name, temperature=settings.temperature, api_key=settings.openai_api_key)
-        
-        executor_agent = create_react_agent(
-            model=llm,
-            tools=ALL_GRAPH_TOOLS,
-            prompt=DIAGRAM_EXECUTOR_PROMPT
-        )
-        
+
         # Log LLM call
         prompt_content = f"Execute this plan: {state['plan']}"
         logger.info(f"LLM Call - Model: {settings.model_name}, Temperature: {settings.temperature}, Agent: executor, Prompt: {prompt_content}")
         
-        # Execute the plan
+        # Execute the plan using direct LLM invocation
         start_time = time.time()
-        result = executor_agent.invoke([
-            SystemMessage(content=DIAGRAM_EXECUTOR_PROMPT),
-            AIMessage(content=f"Plan: {state['plan']}"),
-            HumanMessage(content=prompt_content)],
+        result: BaseMessage = llm.invoke([
+                SystemMessage(content=DIAGRAM_EXECUTOR_PROMPT),
+                HumanMessage(content=prompt_content)
+            ],
         )
         duration_ms = (time.time() - start_time) * 1000
         
-        
         # Log LLM response
-        logger.info(f"LLM Response - Model: {settings.model_name}, Agent: executor, Duration: {duration_ms:.2f}ms, Response: {str(result)}")
-        execution_result = result["messages"][-1].content if result["messages"] else "No execution result"
+        logger.info(result)
+        execution_result = result.content if result.content else "No execution result"
 
         logger.info(f"Executor completed plan execution successfully in {duration_ms:.2f}ms")
         
-        return {
-            **state,
-            "result": execution_result,
-            "success": True
-        }
+        state.update(result=execution_result, success=True)
+        return state
         
     except Exception as e:
         logger.error(f"LLM Error - Model: {settings.model_name}, Agent: executor, Error: {str(e)}, Prompt: Execute this plan: {state.get('plan', 'No plan')}")
         logger.error(f"Execution failed: {str(e)}")
-        return {
-            **state,
-            "result": None,
-            "success": False,
-            "error": f"Execution failed: {str(e)}"
-        }
+        state.update(result=None, success=False, error=f"Execution failed: {str(e)}")
+        return state
 
 
 class DiagramAgent:
@@ -284,98 +266,7 @@ class DiagramAgent:
             logger.error(f"Chat interaction failed for session_id: {session_id}: {str(e)}")
             return f"Error in chat: {str(e)}"
 
-
-# Legacy agent classes for backward compatibility (now implemented as nodes)
-
-class PlannerAgent:
-    """
-    Legacy planner agent - now implemented as a node in the workflow.
-    Kept for backward compatibility.
-    """
-    
-    def __init__(self, model_name: str = settings.model_name, temperature: float = settings.temperature):
-        """Initialize the planner agent."""
-        self.model_name = model_name
-        self.temperature = temperature
-    
-    async def create_plan(self, description: str) -> str:
-        """
-        Create a detailed execution plan for diagram generation.
-        
-        Args:
-            description: Natural language description of the diagram
-            
-        Returns:
-            str: Detailed execution plan
-        """
-        # Use the planner node function directly
-        state = DiagramState(
-            message=description,
-            plan=None,
-            result=None,
-            success=False,
-            error=None,
-            file_path=None,
-            graph_data=None
-        )
-        
-        result_state = planner_node(state)
-        return result_state.get("plan") or "No plan generated"
-
-
-class ExecutorAgent:
-    """
-    Legacy executor agent - now implemented as a node in the workflow.
-    Kept for backward compatibility.
-    """
-    
-    def __init__(self, model_name: str = settings.model_name, temperature: float = settings.temperature):
-        """Initialize the executor agent."""
-        self.model_name = model_name
-        self.temperature = temperature
-    
-    async def execute_plan(self, plan: str) -> DiagramGenerationResult:
-        """
-        Execute a diagram generation plan.
-        
-        Args:
-            plan: Detailed execution plan
-            
-        Returns:
-            DiagramGenerationResult: Result of the execution
-        """
-        # Use the executor node function directly
-        state = DiagramState(
-            message="",
-            plan=plan,
-            result=None,
-            success=False,
-            error=None,
-            file_path=None,
-            graph_data=None
-        )
-        
-        result_state = executor_node(state)
-        
-        return DiagramGenerationResult(
-            success=result_state.get("success", False),
-            message=result_state.get("result") or result_state.get("error") or "Execution completed",
-            file_path=result_state.get("file_path"),
-            graph_data=result_state.get("graph_data")
-        )
-
-
 # Factory functions for easy agent creation
 def create_diagram_agent(model_name: str = settings.model_name, temperature: float = settings.temperature) -> DiagramAgent:
     """Create a diagram generation agent with LangGraph workflow."""
     return DiagramAgent(model_name=model_name, temperature=temperature)
-
-
-def create_planner_agent(model_name: str = settings.model_name, temperature: float = settings.temperature) -> PlannerAgent:
-    """Create a planning agent (legacy compatibility)."""
-    return PlannerAgent(model_name=model_name, temperature=temperature)
-
-
-def create_executor_agent(model_name: str = settings.model_name, temperature: float = settings.temperature) -> ExecutorAgent:
-    """Create an executor agent (legacy compatibility)."""
-    return ExecutorAgent(model_name=model_name, temperature=temperature)
