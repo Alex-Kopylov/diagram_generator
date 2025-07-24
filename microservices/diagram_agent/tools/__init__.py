@@ -4,7 +4,7 @@ Diagram generation tools.
 This package provides native LangGraph tools for diagram generation.
 """
 
-from .graph_tools import (
+from tools.graph_tools import (
     create_node,
     create_edge,
     create_cluster,

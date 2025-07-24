@@ -11,7 +11,7 @@ from langchain_core.tools import tool
 from pydantic import BaseModel, Field
 
 # Import graph structures - create a local copy to avoid external dependencies
-from ..core.graph_structure import Node, Edge, Cluster, Graph, Direction
+from core.graph_structure import Node, Edge, Cluster, Graph, Direction
 
 
 class CreateNodeInput(BaseModel):
@@ -77,7 +77,8 @@ def create_node(name: str, id: Optional[str] = None) -> Node:
     """
     if id:
         return Node(name=name, id=id)
-    return Node(name=name)
+    else:
+        return Node(name=name)
 
 
 @tool

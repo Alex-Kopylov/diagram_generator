@@ -29,7 +29,6 @@ class Settings(BaseSettings):
     
     # Diagram Configuration
     default_output_format: str = Field(default="png", env="DEFAULT_OUTPUT_FORMAT")
-    max_diagram_size: str = Field(default="10MB", env="MAX_DIAGRAM_SIZE")
     temp_dir: Path = Field(default=Path("/tmp/diagram_generator"), env="TEMP_DIR")
     
     model_config = {

@@ -9,7 +9,7 @@ from typing import Dict, Any, Optional
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel, Field
 
-from ..agents.diagram_agent import create_diagram_agent
+from agents.diagram_agent import create_diagram_agent
 
 # Initialize FastAPI app
 app = FastAPI(
@@ -26,7 +26,6 @@ diagram_agent = create_diagram_agent()
 class DiagramRequest(BaseModel):
     """Request schema for diagram generation."""
     message: str = Field(..., description="User message describing the diagram to create")
-    output_file: Optional[str] = Field(None, description="Optional output file name")
 
 
 class DiagramResponse(BaseModel):
@@ -59,7 +58,7 @@ class HealthResponse(BaseModel):
 @app.get("/health", response_model=HealthResponse)
 async def health_check():
     """Health check endpoint."""
-    from ..tools.graph_tools import ALL_GRAPH_TOOLS
+    from tools.graph_tools import ALL_GRAPH_TOOLS
     return HealthResponse(
         status="healthy",
         tools_available=len(ALL_GRAPH_TOOLS)

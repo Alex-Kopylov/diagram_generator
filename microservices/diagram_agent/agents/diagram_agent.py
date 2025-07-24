@@ -10,9 +10,9 @@ from langchain_openai import ChatOpenAI
 from langchain_core.messages import BaseMessage, HumanMessage
 from pydantic import BaseModel, Field
 
-from ..tools.graph_tools import ALL_GRAPH_TOOLS
-from .prompts import DIAGRAM_PLANNER_PROMPT, DIAGRAM_EXECUTOR_PROMPT, ASSISTANT_PROMPT
-from ..config.settings import get_settings
+from tools.graph_tools import ALL_GRAPH_TOOLS
+from agents.prompts import DIAGRAM_PLANNER_PROMPT, DIAGRAM_EXECUTOR_PROMPT, ASSISTANT_PROMPT
+from config.settings import get_settings
 
 settings = get_settings()
 
