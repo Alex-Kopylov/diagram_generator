@@ -12,8 +12,9 @@ class Settings(BaseSettings):
     """Application settings with environment variable support."""
     
     # OpenAI Configuration
-    openai_api_key: Optional[SecretStr] = Field(default=None, env="OPENAI_API_KEY")
-    model_name: str = Field(default="gpt-4o-mini", env="MODEL_NAME")
+    openai_api_key: Optional[SecretStr] = Field(default="test", env="OPENAI_API_KEY")
+    model_name: str = Field(default="gpt-4.1-nano-2025-04-14", env="MODEL_NAME")
+    temperature: float = Field(default=0.1, env="TEMPERATURE")
     
     # LangGraph Configuration
     graph_renderer: str = Field(default="png", env="GRAPH_RENDERER")
@@ -24,7 +25,7 @@ class Settings(BaseSettings):
     host: str = Field(default="0.0.0.0", env="HOST")
     port: int = Field(default=3502, env="PORT")
     reload: bool = Field(default=False, env="RELOAD") 
-    log_level: str = Field(default="info", env="LOG_LEVEL")
+    log_level: str = Field(default="INFO", env="LOG_LEVEL")  # Updated to match logger format
     debug: bool = Field(default=False, env="DEBUG")
     
     # Diagram Configuration
@@ -35,6 +36,7 @@ class Settings(BaseSettings):
         "env_file": ".env",
         "env_file_encoding": "utf-8",
         "case_sensitive": False,
+        "extra": "ignore",
     }
 
 

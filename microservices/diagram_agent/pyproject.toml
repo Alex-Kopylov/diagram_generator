@@ -16,6 +16,7 @@ dependencies = [
     "python-multipart>=0.0.6",
     "tenacity>=8.2.0",
     "diagrams>=0.24.0",
+    "langgraph-cli[inmem]>=0.3.6",
 ]
 
 [project.optional-dependencies]

@@ -64,7 +64,7 @@ class DiagramResult(BaseModel):
     error: Optional[str] = Field(None, description="Error message if generation failed")
 
 
-@tool
+@tool(args_schema=CreateNodeInput) 
 def create_node(name: str, id: Optional[str] = None) -> Node:
     """Create a new graph node.
     
@@ -75,10 +75,10 @@ def create_node(name: str, id: Optional[str] = None) -> Node:
     Returns:
         Node: Created node object
     """
-    if id:
-        return Node(name=name, id=id)
+    if input.id:
+        return Node(name=input.name, id=input.id)
     else:
-        return Node(name=name)
+        return Node(name=input.name)
 
 
 @tool

@@ -9,7 +9,7 @@ services:
       - "8000:8000"
     environment:
       - OPENAI_API_KEY=${OPENAI_API_KEY}
-      - MODEL_NAME=${MODEL_NAME:-gpt-4o-mini}
+      - MODEL_NAME=${MODEL_NAME:-gpt-4.1-nano-2025-04-14}
       - LOG_LEVEL=${LOG_LEVEL:-INFO}
       - DEBUG=${DEBUG:-false}
     env_file:

@@ -111,7 +111,6 @@ Response:
 ```json
 {
   "status": "healthy",  
-  "tools_available": 8
 }
 ```
 

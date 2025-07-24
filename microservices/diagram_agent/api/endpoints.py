@@ -6,8 +6,9 @@ Provides HTTP endpoints for diagram generation and health checks using native to
 
 import os
 from typing import Dict, Any, Optional
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request
 from pydantic import BaseModel, Field
+from loguru import logger
 
 from agents.diagram_agent import create_diagram_agent
 
@@ -51,17 +52,15 @@ class ChatResponse(BaseModel):
 class HealthResponse(BaseModel):
     """Health check response."""
     status: str = Field(..., description="Service status")
-    tools_available: int = Field(..., description="Number of available native tools")
 
 
 # Health check endpoint
 @app.get("/health", response_model=HealthResponse)
 async def health_check():
     """Health check endpoint."""
-    from tools.graph_tools import ALL_GRAPH_TOOLS
+    logger.debug("Health check requested")
     return HealthResponse(
         status="healthy",
-        tools_available=len(ALL_GRAPH_TOOLS)
     )
 
 
@@ -73,21 +72,25 @@ async def generate_diagram(request: DiagramRequest):
     
     This endpoint provides stateless diagram generation using the LangGraph agent
     """
+    logger.info(f"Diagram generation request received: {request.message}")
     try:
         # Use the native diagram agent
         result = await diagram_agent.generate_diagram(
-            message=request.message,
-            output_file=request.output_file
+            message=request.message
         )
         
-        return DiagramResponse(
+        response = DiagramResponse(
             success=result.success,
             message=result.message,
             file_path=result.file_path,
             graph_data=result.graph_data
         )
+        
+        logger.info(f"Diagram generation request completed successfully: {result.success}")
+        return response
     
     except Exception as e:
+        logger.error(f"Diagram generation request failed: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Diagram generation failed: {str(e)}")
 
 
@@ -100,6 +103,7 @@ async def chat_endpoint(request: ChatRequest):
     This endpoint provides conversational interactions with the diagram agent
     using native tools.
     """
+    logger.info(f"Chat request received for session {request.session_id}: {request.message}")
     try:
         # Use the native diagram agent for chat
         response = await diagram_agent.chat(
@@ -107,12 +111,16 @@ async def chat_endpoint(request: ChatRequest):
             session_id=request.session_id
         )
         
-        return ChatResponse(
+        chat_response = ChatResponse(
             message=response,
             session_id=request.session_id
         )
+        
+        logger.info(f"Chat request completed successfully for session {request.session_id}")
+        return chat_response
     
     except Exception as e:
+        logger.error(f"Chat request failed for session {request.session_id}: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Chat failed: {str(e)}")
 
 
