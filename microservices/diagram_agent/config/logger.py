@@ -14,7 +14,7 @@ class LoggerSettings(BaseSettings):
     
     log_level: str = Field(default="INFO")
     log_file: Optional[str] = Field(default="logs/diagram_agent.log")
-    debug: bool = Field(default=False)
+    debug: bool = Field(default=True)
     
     model_config = {
         "env_file": ".env",

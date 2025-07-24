@@ -10,7 +10,8 @@ from typing import Dict, Any, Optional
 from typing_extensions import TypedDict
 from langgraph.graph import StateGraph, START, END
 from langgraph.prebuilt import create_react_agent
-from langchain_core.messages import HumanMessage, SystemMessage, AIMessage, ToolMessage
+
+from langchain_core.messages import HumanMessage, SystemMessage, AIMessage, ToolMessage, BaseMessage
 from pydantic import BaseModel, Field
 from loguru import logger
 
@@ -75,7 +76,7 @@ def planner_node(state: DiagramState) -> DiagramState:
         
         # Create plan using the planner agent
         start_time = time.time()
-        result = llm.invoke([
+        result: BaseMessage = llm.invoke([
                 SystemMessage(content=DIAGRAM_PLANNER_PROMPT),
                 HumanMessage(content=prompt_content)
             ],
@@ -83,25 +84,17 @@ def planner_node(state: DiagramState) -> DiagramState:
         duration_ms = (time.time() - start_time) * 1000
         
         # Log LLM response
-        logger.info(f"LLM Response - Model: {settings.model_name}, Agent: planner, Duration: {duration_ms:.2f}ms, Response: {str(result)}")
-        plan = result["messages"][-1].content if result["messages"] else "No plan generated"
+        logger.info(result)
+        plan = result.content if result.content else "No plan generated"
 
-        
-        return {
-            **state,
-            "plan": plan,
-            "success": True
-        }
+        state.update(plan=plan, success=True)
+        return state
         
     except Exception as e:
-        logger.error(f"LLM Error - Model: {settings.model_name}, Agent: planner, Error: {str(e)}, Prompt: Create a detailed plan for: {state['message']}")
+        logger.exception(f"LLM Error - Model: {settings.model_name}, Agent: planner, Error: {str(e)}, Prompt: Create a detailed plan for: {state['message']}")
         logger.error(f"Planning failed: {str(e)}")
-        return {
-            **state,
-            "plan": None,
-            "success": False,
-            "error": f"Planning failed: {str(e)}"
-        }
+        state.update(plan=None, success=False, error=f"Planning failed: {str(e)}")
+        return state
 
 
 def executor_node(state: DiagramState) -> DiagramState:

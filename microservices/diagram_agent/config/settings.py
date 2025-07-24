@@ -24,7 +24,7 @@ class Settings(BaseSettings):
     # Application Configuration
     host: str = Field(default="0.0.0.0", env="HOST")
     port: int = Field(default=3502, env="PORT")
-    reload: bool = Field(default=False, env="RELOAD") 
+    reload: bool = Field(default=True, env="RELOAD") 
     log_level: str = Field(default="INFO", env="LOG_LEVEL")  # Updated to match logger format
     debug: bool = Field(default=False, env="DEBUG")
     
