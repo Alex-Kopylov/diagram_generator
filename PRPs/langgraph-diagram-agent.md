@@ -47,7 +47,7 @@ Create an intelligent LangGraph agent that uses the existing MCP graph server to
    client = MultiServerMCPClient({
        "graph": {
            "command": "python", 
-           "args": ["./mcp_graph_server.py"],
+           "args": ["../mcp_server/mcp_graph_server.py"],
            "transport": "stdio"
        }
    })
@@ -337,28 +337,38 @@ async def test_plan_tool_sequence():
 
 ### Code Quality
 ```bash
-# Style and type checking
-ruff check --fix diagram_agent/
-mypy diagram_agent/
+# MCP Server validation
+cd microservices/mcp_server
+uv run ruff check --fix .
+uv run mypy .
+
+# Diagram Agent validation  
+cd ../diagram_agent
+uv run ruff check --fix .
+uv run mypy .
 
 # Security scanning
-bandit -r diagram_agent/
+uv run bandit -r .
 ```
 
 ### Unit Tests
 ```bash
-# Run all tests with coverage
-pytest tests/ -v --cov=diagram_agent --cov-report=html
+# MCP Server tests
+cd microservices/mcp_server
+uv run pytest tests/ -v --cov=mcp_server --cov-report=html
 
-# Specific test categories
-pytest tests/unit/ -v  # Unit tests
-pytest tests/integration/ -v  # Integration tests
+# Diagram Agent tests
+cd ../diagram_agent
+uv run pytest tests/ -v --cov=diagram_agent --cov-report=html
 ```
 
 ### API Testing
 ```bash
-# Start server and test endpoints
-uvicorn diagram_agent.api.endpoints:app --host 0.0.0.0 --port 8000 &
+# Start diagram agent server
+cd microservices/diagram_agent
+uv run uvicorn diagram_agent.api.endpoints:app --host 0.0.0.0 --port 8000 &
+
+# Test endpoints
 curl -X POST "http://localhost:8000/generate-diagram" \
   -H "Content-Type: application/json" \
   -d '{"message": "Create microservices architecture"}'
@@ -367,8 +377,8 @@ curl -X POST "http://localhost:8000/generate-diagram" \
 ### Integration Validation  
 ```bash
 # Test MCP server connectivity
-cd microservices/mcp_server && python mcp_graph_server.py &
-cd microservices/diagram_agent && python -c "
+cd microservices/mcp_server && uv run mcp mcp_graph_server.py &
+cd microservices/diagram_agent && uv run python -c "
 from diagram_agent.tools.mcp_client import setup_mcp_client
 client = setup_mcp_client()
 tools = await client.get_tools()
@@ -393,11 +403,13 @@ dependencies = [
 
 ### Environment Setup
 ```bash
-# Activate virtual environment
-source venv_linux/bin/activate
+# Install MCP server dependencies
+cd microservices/mcp_server
+uv sync
 
-# Install dependencies
-pip install -e .
+# Install diagram agent dependencies
+cd ../diagram_agent
+uv sync
 
 # Set required environment variables
 export OPENAI_API_KEY="your-api-key-here"
