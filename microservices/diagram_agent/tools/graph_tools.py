@@ -7,6 +7,9 @@ This module provides native LangGraph tools for direct graph construction.
 from typing import Any, Dict, List, Optional, Union
 import os
 import sys
+import pkgutil
+import importlib
+import inspect
 from langchain_core.tools import tool
 from pydantic import BaseModel, Field
 from loguru import logger
@@ -79,6 +82,17 @@ class DiagramResult(BaseModel):
     success: bool = Field(..., description="Whether diagram generation succeeded")
     file_path: Optional[str] = Field(None, description="Generated diagram file path")
     error: Optional[str] = Field(None, description="Error message if generation failed")
+
+
+class ListResourcesByProviderInput(BaseModel):
+    """Input schema for listing resources by provider."""
+    provider: str = Field(..., description="Provider name (e.g., 'aws', 'gcp', 'azure')")
+
+
+class ListNodesByResourceInput(BaseModel):
+    """Input schema for listing nodes by provider and resource."""
+    provider: str = Field(..., description="Provider name (e.g., 'aws', 'gcp', 'azure')")
+    resource: str = Field(..., description="Resource category (e.g., 'compute', 'database', 'network')")
 
 
 @tool(args_schema=CreateNodeInput) 
@@ -355,6 +369,113 @@ def generate_diagram(input: GenerateDiagramInput) -> DiagramResult:
         return DiagramResult(success=False, file_path=None, error=str(e))
 
 
+@tool
+def list_all_providers() -> List[str]:
+    """List all available cloud providers in the diagrams package.
+    
+    Returns:
+        List[str]: List of available providers (e.g., ['aws', 'gcp', 'azure', 'alibaba'])
+    """
+    try:
+        import diagrams
+        providers = []
+        
+        # Get the diagrams package path
+        diagrams_path = diagrams.__path__
+        
+        # Walk through all modules in diagrams package
+        for importer, modname, ispkg in pkgutil.iter_modules(diagrams_path):
+            # Skip __init__ and other special modules
+            if not modname.startswith('_') and ispkg:
+                # Check if it's a provider by looking for submodules
+                try:
+                    provider_module = importlib.import_module(f'diagrams.{modname}')
+                    if hasattr(provider_module, '__path__'):
+                        providers.append(modname)
+                except ImportError:
+                    continue
+        
+        providers.sort()
+        logger.info(f"Found {len(providers)} providers: {providers}")
+        return providers
+        
+    except Exception as e:
+        logger.error(f"Failed to list providers: {str(e)}")
+        return []
+
+
+@tool(args_schema=ListResourcesByProviderInput)
+def list_resources_by_provider(input: ListResourcesByProviderInput) -> List[str]:
+    """List all resource categories for a specific provider.
+    
+    Args:
+        input: Provider specification
+        
+    Returns:
+        List[str]: List of resource categories (e.g., ['compute', 'database', 'network'])
+    """
+    try:
+        provider = input.provider.lower()
+        resources = []
+        
+        # Import the provider module
+        provider_module = importlib.import_module(f'diagrams.{provider}')
+        
+        if hasattr(provider_module, '__path__'):
+            # Walk through all submodules in the provider
+            for importer, modname, ispkg in pkgutil.iter_modules(provider_module.__path__):
+                if not modname.startswith('_'):
+                    resources.append(modname)
+        
+        resources.sort()
+        logger.info(f"Found {len(resources)} resources for {provider}: {resources}")
+        return resources
+        
+    except ImportError:
+        logger.error(f"Provider '{input.provider}' not found")
+        return []
+    except Exception as e:
+        logger.error(f"Failed to list resources for {input.provider}: {str(e)}")
+        return []
+
+
+@tool(args_schema=ListNodesByResourceInput)
+def list_nodes_by_resource(input: ListNodesByResourceInput) -> List[str]:
+    """List all available node classes for a specific provider and resource category.
+    
+    Args:
+        input: Provider and resource specification
+        
+    Returns:
+        List[str]: List of node class names (e.g., ['EC2', 'Lambda', 'ECS'])
+    """
+    try:
+        provider = input.provider.lower()
+        resource = input.resource.lower()
+        nodes = []
+        
+        # Import the specific resource module
+        module_name = f'diagrams.{provider}.{resource}'
+        resource_module = importlib.import_module(module_name)
+        
+        # Get all classes from the module
+        for name, obj in inspect.getmembers(resource_module, inspect.isclass):
+            # Only include classes defined in this module (not imported ones)
+            if obj.__module__ == module_name and not name.startswith('_'):
+                nodes.append(name)
+        
+        nodes.sort()
+        logger.info(f"Found {len(nodes)} nodes for {provider}.{resource}: {nodes}")
+        return nodes
+        
+    except ImportError:
+        logger.error(f"Resource '{input.provider}.{input.resource}' not found")
+        return []
+    except Exception as e:
+        logger.error(f"Failed to list nodes for {input.provider}.{input.resource}: {str(e)}")
+        return []
+
+
 # List of all available tools for easy import
 ALL_GRAPH_TOOLS = [
     create_node,
@@ -364,5 +485,8 @@ ALL_GRAPH_TOOLS = [
     add_to_graph,
     validate_graph,
     graph_to_json,
-    generate_diagram
+    generate_diagram,
+    list_all_providers,
+    list_resources_by_provider,
+    list_nodes_by_resource
 ]

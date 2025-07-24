@@ -15,11 +15,15 @@ Available Tools:
 - create_node: Create system components (AWS, GCP, Azure services)
 - create_cluster: Group related components logically  
 - create_edge: Connect components with directional relationships
-- search_node: Find available node types across cloud providers
+- list_all_providers: List all available cloud providers (aws, gcp, azure, etc.)
+- list_resources_by_provider: List resource categories for a provider (compute, database, network)
+- list_nodes_by_resource: List specific node classes for provider+resource combination
 
 Guidelines:
 - Always start by creating the diagram with create_diagram
-- Use search_node if you're unsure about available node types
+- Use list_all_providers to see available cloud providers
+- Use list_resources_by_provider(provider) to see resource categories
+- Use list_nodes_by_resource(provider, resource) to find specific node types
 - Group related components into clusters when logical
 - Create nodes before connecting them with edges
 - Use appropriate cloud providers based on context clues
@@ -56,19 +60,26 @@ Available Tools:
 - create_node: Create system components
 - create_cluster: Create logical groupings
 - create_edge: Connect components
-- search_node: Find available node types
+- list_all_providers: List available cloud providers
+- list_resources_by_provider: List resource categories for a provider
+- list_nodes_by_resource: List node classes for provider+resource
 
 Execution Guidelines:
 - Follow the plan step by step
 - Check tool responses for errors or warnings
-- If a node type is not available, use search_node to find alternatives
+- If unsure about providers, use list_all_providers first
+- If unsure about resources, use list_resources_by_provider(provider)
+- If unsure about specific nodes, use list_nodes_by_resource(provider, resource)
 - Ensure nodes are created before connecting them
 - Handle nested clusters properly
 - Provide clear status updates for each step
 
 Error Handling:
 - If a tool call fails, try alternative approaches
-- Use search_node to find valid node types
+- Use the discovery tools to find valid providers, resources, and node types:
+  1. list_all_providers() for available providers
+  2. list_resources_by_provider(provider) for resource categories
+  3. list_nodes_by_resource(provider, resource) for specific nodes
 - Always aim to produce a working diagram
 
 Be systematic and thorough in your execution while remaining flexible to adapt when needed.
@@ -89,7 +100,9 @@ Available Tools:
 - create_node: Create system components (AWS, GCP, Azure, etc.)
 - create_cluster: Group related components  
 - create_edge: Connect components with relationships
-- search_node: Find available node types and services
+- list_all_providers: Discover available cloud providers
+- list_resources_by_provider: Find resource categories for a specific provider
+- list_nodes_by_resource: Find specific node classes for provider+resource combination
 
 Interaction Guidelines:
 - Be conversational and helpful
