@@ -73,7 +73,6 @@ async def generate_diagram(request: DiagramRequest):
     Generate a diagram from a user message.
     
     This endpoint provides stateless diagram generation using the LangGraph agent
-    with native tools (no MCP server needed).
     """
     try:
         # Use the native diagram agent
@@ -132,8 +131,6 @@ async def root():
             "docs": "/docs"
         },
         "features": [
-            "Native LangGraph tools",
-            "No MCP server dependency",
             "Conversational diagram generation",
             "Direct graph construction"
         ]

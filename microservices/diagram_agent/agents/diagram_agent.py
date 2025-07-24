@@ -2,7 +2,6 @@
 LangGraph-based diagram generation agent.
 
 This agent uses native tools for diagram generation, eliminating the need
-for MCP client communication and creating a unified microservice.
 """
 
 from typing import Dict, Any, List, Optional, Annotated
@@ -10,14 +9,12 @@ from langgraph.prebuilt import create_react_agent
 from langchain_openai import ChatOpenAI
 from langchain_core.messages import BaseMessage, HumanMessage
 from pydantic import BaseModel, Field
-import os
-from dotenv import load_dotenv
 
 from ..tools.graph_tools import ALL_GRAPH_TOOLS
 from .prompts import DIAGRAM_PLANNER_PROMPT, DIAGRAM_EXECUTOR_PROMPT, ASSISTANT_PROMPT
+from ..config.settings import get_settings
 
-# Load environment variables
-load_dotenv()
+settings = get_settings()
 
 
 class DiagramGenerationResult(BaseModel):
@@ -47,7 +44,7 @@ class DiagramAgent:
         self.llm = ChatOpenAI(
             model=model_name,
             temperature=temperature,
-            api_key=os.getenv("OPENAI_API_KEY")
+            api_key=settings.openai_api_key
         )
         
         # Create the ReAct agent with graph tools
@@ -148,7 +145,7 @@ class PlannerAgent:
         self.llm = ChatOpenAI(
             model=model_name,
             temperature=temperature,
-            api_key=os.getenv("OPENAI_API_KEY")
+            api_key=settings.openai_api_key
         )
         
         self.agent = create_react_agent(
@@ -190,7 +187,7 @@ class ExecutorAgent:
         self.llm = ChatOpenAI(
             model=model_name,
             temperature=temperature,
-            api_key=os.getenv("OPENAI_API_KEY")
+            api_key=settings.openai_api_key
         )
         
         self.agent = create_react_agent(

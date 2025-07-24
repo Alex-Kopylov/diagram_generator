@@ -13,15 +13,6 @@ A unified microservice for generating diagrams using native LangGraph tools, eli
 
 ## 🏗️ Architecture
 
-### Before (MCP-based)
-```
-┌─────────────────┐    HTTP/SSE    ┌─────────────────┐
-│  Diagram Agent  │ ──────────────▶ │   MCP Server    │
-│   (LangGraph)   │                │ (Graph Tools)   │
-└─────────────────┘                └─────────────────┘
-```
-
-### After (Unified)
 ```
 ┌─────────────────────────────────────┐
 │         Diagram Agent               │
@@ -29,9 +20,9 @@ A unified microservice for generating diagrams using native LangGraph tools, eli
 │  │  LangGraph  │─│  Native Tools   ││
 │  │   Agent     │ │ (Graph Const.)  ││
 │  └─────────────┘ └─────────────────┘│
-│  ┌─────────────────────────────────┐ │
-│  │        FastAPI Endpoints        │ │
-│  └─────────────────────────────────┘ │
+│ ┌─────────────────────────────────┐ │
+│ │        FastAPI Endpoints        │ │
+│ └─────────────────────────────────┘ │
 └─────────────────────────────────────┘
 ```
 
@@ -162,7 +153,6 @@ Response:
   },
   "features": [
     "Native LangGraph tools",
-    "No MCP server dependency",
     "Conversational diagram generation",
     "Direct graph construction"
   ]
@@ -304,24 +294,6 @@ Enable debug logging:
 export LOG_LEVEL=debug
 python main.py
 ```
-
-## 🔄 Migration from MCP Architecture
-
-If migrating from the previous MCP-based architecture:
-
-1. **Remove MCP Server Dependency**: No longer needed
-2. **Update Environment Variables**: Remove `MCP_SERVER_URL`
-3. **Simplify Docker Compose**: Single service instead of two
-4. **Update API Calls**: Same endpoints, improved performance
-
-## 📈 Performance Improvements
-
-Compared to the MCP-based architecture:
-
-- **~50ms faster** response times (no network overhead)
-- **~40% fewer resources** required (single service)
-- **99.9% availability** (no external dependencies) 
-- **Simplified debugging** (single service logs)
 
 ## 🤝 Contributing
 

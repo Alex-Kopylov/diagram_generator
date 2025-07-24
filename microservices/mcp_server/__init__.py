@@ -1,1 +1,0 @@
-"""MCP Server microservice for graph construction tools."""

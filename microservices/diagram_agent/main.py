@@ -1,38 +1,25 @@
 """
 Main entry point for the LangGraph Diagram Agent service.
 
-This service provides diagram generation capabilities using native LangGraph tools
-without requiring an external MCP server.
-"""
+This service provides diagram generation capabilities using native LangGraph tools."""
 
-import os
 import uvicorn
-from dotenv import load_dotenv
 
 from api.endpoints import app
+from config.settings import get_settings
 
-# Load environment variables
-load_dotenv()
+settings = get_settings()
 
 
 def main():
     """Run the diagram agent service."""
-    port = int(os.getenv("PORT", "3502"))
-    host = os.getenv("HOST", "0.0.0.0")
-    
-    print(f"Starting LangGraph Diagram Agent on {host}:{port}")
-    print("Features:")
-    print("- Native LangGraph tools")
-    print("- No MCP server dependency")
-    print("- Direct graph construction")
-    print("- Conversational diagram generation")
-    
+    print(f"Starting LangGraph Diagram Agent on {settings.host}:{settings.port}")    
     uvicorn.run(
         "main:app",
-        host=host,
-        port=port,
-        reload=os.getenv("RELOAD", "false").lower() == "true",
-        log_level=os.getenv("LOG_LEVEL", "info").lower()
+        host=settings.host,
+        port=settings.port,
+        reload=settings.reload,
+        log_level=settings.log_level
     )
 
 

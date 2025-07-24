@@ -1,8 +1,7 @@
 """
 LangGraph tools for diagram generation.
 
-This module converts MCP server tools into native LangGraph tools,
-eliminating the need for network communication between services.
+This module provides native LangGraph tools for direct graph construction.
 """
 
 from typing import Any, Dict, List, Optional, Union
@@ -11,9 +10,8 @@ import sys
 from langchain_core.tools import tool
 from pydantic import BaseModel, Field
 
-# Add MCP server path to import graph structures
-sys.path.append(os.path.join(os.path.dirname(__file__), '../../../mcp_server'))
-from graph_structure import Node, Edge, Cluster, Graph, Direction
+# Import graph structures - create a local copy to avoid external dependencies
+from ..core.graph_structure import Node, Edge, Cluster, Graph, Direction
 
 
 class CreateNodeInput(BaseModel):
