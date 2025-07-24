@@ -69,7 +69,6 @@ Execution Guidelines:
 Error Handling:
 - If a tool call fails, try alternative approaches
 - Use search_node to find valid node types
-- Simplify complex structures if needed
 - Always aim to produce a working diagram
 
 Be systematic and thorough in your execution while remaining flexible to adapt when needed.

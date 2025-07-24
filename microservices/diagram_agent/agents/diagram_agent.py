@@ -10,15 +10,14 @@ from typing import Dict, Any, Optional
 from typing_extensions import TypedDict
 from langgraph.graph import StateGraph, START, END
 from langgraph.prebuilt import create_react_agent
-from langchain_openai import ChatOpenAI
-from langchain_core.messages import HumanMessage
+from langchain_core.messages import HumanMessage, SystemMessage, AIMessage, ToolMessage
 from pydantic import BaseModel, Field
 from loguru import logger
 
 from tools.graph_tools import ALL_GRAPH_TOOLS
 from agents.prompts import DIAGRAM_PLANNER_PROMPT, DIAGRAM_EXECUTOR_PROMPT
 from config.settings import get_settings
-from config.logger import log_llm_call, log_llm_response, log_llm_error
+from langchain.chat_models import init_chat_model
 
 settings = get_settings()
 
@@ -68,45 +67,25 @@ def planner_node(state: DiagramState) -> DiagramState:
     logger.info("---PLANNER NODE---")
     try:
         # Initialize planner agent
-        llm = ChatOpenAI(
-            model=settings.model_name,
-            temperature=settings.temperature,
-            api_key=settings.openai_api_key
-        )
-        
-        planner_agent = create_react_agent(
-            model=llm,
-            tools=ALL_GRAPH_TOOLS,
-            prompt=DIAGRAM_PLANNER_PROMPT
-        )
-        
+        llm = init_chat_model(model=settings.model_name, temperature=settings.temperature, api_key=settings.openai_api_key)
+
         # Log LLM call
         prompt_content = f"Create a detailed plan for: {state['message']}"
-        log_llm_call(
-            model=settings.model_name,
-            prompt=prompt_content,
-            temperature=settings.temperature,
-            agent_type="planner"
-        )
+        logger.info(f"LLM Call - Model: {settings.model_name}, Temperature: {settings.temperature}, Agent: planner, Prompt: {prompt_content}")
         
         # Create plan using the planner agent
         start_time = time.time()
-        result = planner_agent.invoke({
-            "messages": [HumanMessage(content=prompt_content)]
-        })
+        result = llm.invoke([
+                SystemMessage(content=DIAGRAM_PLANNER_PROMPT),
+                HumanMessage(content=prompt_content)
+            ],
+        )
         duration_ms = (time.time() - start_time) * 1000
         
-        plan = result["messages"][-1].content if result["messages"] else "No plan generated"
-        
         # Log LLM response
-        log_llm_response(
-            model=settings.model_name,
-            response=plan,
-            duration_ms=duration_ms,
-            agent_type="planner"
-        )
-        
-        logger.info(f"Planner generated plan successfully in {duration_ms:.2f}ms")
+        logger.info(f"LLM Response - Model: {settings.model_name}, Agent: planner, Duration: {duration_ms:.2f}ms, Response: {str(result)}")
+        plan = result["messages"][-1].content if result["messages"] else "No plan generated"
+
         
         return {
             **state,
@@ -115,12 +94,7 @@ def planner_node(state: DiagramState) -> DiagramState:
         }
         
     except Exception as e:
-        log_llm_error(
-            model=settings.model_name,
-            error=e,
-            prompt=f"Create a detailed plan for: {state['message']}",
-            agent_type="planner"
-        )
+        logger.error(f"LLM Error - Model: {settings.model_name}, Agent: planner, Error: {str(e)}, Prompt: Create a detailed plan for: {state['message']}")
         logger.error(f"Planning failed: {str(e)}")
         return {
             **state,
@@ -151,11 +125,7 @@ def executor_node(state: DiagramState) -> DiagramState:
             }
         
         # Initialize executor agent
-        llm = ChatOpenAI(
-            model=settings.model_name,
-            temperature=settings.temperature,
-            api_key=settings.openai_api_key
-        )
+        llm = init_chat_model(model=settings.model_name, temperature=settings.temperature, api_key=settings.openai_api_key)
         
         executor_agent = create_react_agent(
             model=llm,
@@ -165,30 +135,22 @@ def executor_node(state: DiagramState) -> DiagramState:
         
         # Log LLM call
         prompt_content = f"Execute this plan: {state['plan']}"
-        log_llm_call(
-            model=settings.model_name,
-            prompt=prompt_content,
-            temperature=settings.temperature,
-            agent_type="executor"
-        )
+        logger.info(f"LLM Call - Model: {settings.model_name}, Temperature: {settings.temperature}, Agent: executor, Prompt: {prompt_content}")
         
         # Execute the plan
         start_time = time.time()
-        result = executor_agent.invoke({
-            "messages": [HumanMessage(content=prompt_content)]
-        })
+        result = executor_agent.invoke([
+            SystemMessage(content=DIAGRAM_EXECUTOR_PROMPT),
+            AIMessage(content=f"Plan: {state['plan']}"),
+            HumanMessage(content=prompt_content)],
+        )
         duration_ms = (time.time() - start_time) * 1000
         
-        execution_result = result["messages"][-1].content if result["messages"] else "No execution result"
         
         # Log LLM response
-        log_llm_response(
-            model=settings.model_name,
-            response=execution_result,
-            duration_ms=duration_ms,
-            agent_type="executor"
-        )
-        
+        logger.info(f"LLM Response - Model: {settings.model_name}, Agent: executor, Duration: {duration_ms:.2f}ms, Response: {str(result)}")
+        execution_result = result["messages"][-1].content if result["messages"] else "No execution result"
+
         logger.info(f"Executor completed plan execution successfully in {duration_ms:.2f}ms")
         
         return {
@@ -198,12 +160,7 @@ def executor_node(state: DiagramState) -> DiagramState:
         }
         
     except Exception as e:
-        log_llm_error(
-            model=settings.model_name,
-            error=e,
-            prompt=f"Execute this plan: {state.get('plan', 'No plan')}",
-            agent_type="executor"
-        )
+        logger.error(f"LLM Error - Model: {settings.model_name}, Agent: executor, Error: {str(e)}, Prompt: Execute this plan: {state.get('plan', 'No plan')}")
         logger.error(f"Execution failed: {str(e)}")
         return {
             **state,
