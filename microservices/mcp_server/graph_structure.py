@@ -279,7 +279,7 @@ if __name__ == "__main__":
     # Test JSON serialization
     json_data = graph.model_dump_json(indent=2)
     print("JSON serialization works!")
-    
+    print(json_data)
     # Test JSON deserialization
     graph_from_json = Graph.model_validate_json(json_data)
     print(f"Deserialized graph: {graph_from_json}")

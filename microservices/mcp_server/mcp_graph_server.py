@@ -10,7 +10,7 @@ from typing import Any, Dict, List, Optional, Union
 
 from mcp.server.fastmcp import FastMCP
 from pydantic import BaseModel, Field
-from graph_structure import Node, Edge, Cluster, Graph, Direction
+from .graph_structure import Node, Edge, Cluster, Graph, Direction
 
 
 # Input/Output Schemas using Pydantic

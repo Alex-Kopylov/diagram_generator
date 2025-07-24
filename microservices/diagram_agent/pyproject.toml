@@ -1,21 +1,20 @@
 [project]
-name = "diagram-generator"
+name = "diagram-agent"
 version = "0.1.0"
-description = "AI-powered diagram generation microservice using LangGraph"
+description = "LangGraph-based diagram generation agent"
 readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
-    "diagrams>=0.24.4",
     "fastapi>=0.104.1",
     "uvicorn[standard]>=0.24.0",
-    "langgraph==0.5.4",
+    "langgraph>=0.2.0",
     "langchain-openai>=0.1.0",
+    "langchain-mcp-adapters",
     "python-dotenv>=1.0.0",
     "pydantic>=2.5.0",
     "loguru>=0.7.2",
-    "pillow>=10.1.0",
     "python-multipart>=0.0.6",
-    "mcp[cli]>=1.0.0",
+    "tenacity>=8.2.0",
 ]
 
 [project.optional-dependencies]
@@ -34,15 +33,12 @@ build-backend = "setuptools.build_meta"
 
 [tool.setuptools.packages.find]
 include = ["diagram_agent*"]
-exclude = ["docker*", "tests*", "scripts*", "examples*"]
-
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 python_files = ["test_*.py", "*_test.py"]
 python_classes = ["Test*"]
 python_functions = ["test_*"]
-
 
 [tool.ruff]
 select = ["E", "F", "I", "N", "W", "UP"]
