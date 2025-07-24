@@ -9,6 +9,7 @@ import os
 import sys
 from langchain_core.tools import tool
 from pydantic import BaseModel, Field
+from loguru import logger
 
 # Import graph structures - create a local copy to avoid external dependencies
 from core.graph_structure import Node, Edge, Cluster, Graph, Direction
@@ -97,14 +98,14 @@ def create_node(input: CreateNodeInput) -> Node:
 
 
 @tool(args_schema=CreateEdgeInput)
-def create_edge(input: CreateEdgeInput) -> Dict[str, Any]:
+def create_edge(input: CreateEdgeInput) -> Edge:
     """Create a new graph edge between nodes.
     
     Args:
         input: Edge creation parameters
         
     Returns:
-        Dict: Edge data with IDs and direction info
+        Edge: Created edge object
     """
     # Create dummy nodes for edge creation
     source_node = Node(name="temp", id=input.source_id)
@@ -117,31 +118,23 @@ def create_edge(input: CreateEdgeInput) -> Dict[str, Any]:
         reverse=input.reverse
     )
     
-    return {
-        "id": edge.id,
-        "source_id": input.source_id,
-        "target_id": input.target_id,
-        "forward": input.forward,
-        "reverse": input.reverse
-    }
+    return edge
 
 
 @tool(args_schema=CreateClusterInput)
-def create_cluster(input: CreateClusterInput) -> Dict[str, Any]:
+def create_cluster(input: CreateClusterInput) -> Cluster:
     """Create a cluster containing specified nodes.
     
     Args:
         input: Cluster creation parameters
         
     Returns:
-        Dict: Cluster data with name, node IDs, and cluster ID
+        Cluster: Created cluster object
     """
     cluster = Cluster(name=input.name)
-    return {
-        "name": input.name,
-        "node_ids": input.node_ids,
-        "id": cluster.id
-    }
+    # Note: node_ids are provided but nodes need to be added separately
+    # since we don't have access to the actual Node objects here
+    return cluster
 
 
 @tool(args_schema=BuildGraphInput)
@@ -154,6 +147,8 @@ def build_graph(input: BuildGraphInput) -> Graph:
     Returns:
         Graph: Complete graph object
     """
+    logger.debug(f"Building graph: name={input.name}, nodes={len(input.nodes)}, edges={len(input.edges)}")
+    
     # Create graph
     graph = Graph(name=input.name, direction=input.direction)
     
@@ -162,10 +157,11 @@ def build_graph(input: BuildGraphInput) -> Graph:
     for node in input.nodes:
         graph.add_node(node)
         node_map[node.id] = node
+        logger.debug(f"Added node to graph: {node.id}")
     
     # Create and add edges
     for edge_data in input.edges:
-        if "source_id" in edge_data:
+        if isinstance(edge_data, dict) and "source_id" in edge_data:
             # Handle edge data with node IDs
             source_node = node_map[edge_data["source_id"]]
             target_node = node_map[edge_data["target_id"]]
@@ -175,8 +171,11 @@ def build_graph(input: BuildGraphInput) -> Graph:
                 forward=edge_data.get("forward", False),
                 reverse=edge_data.get("reverse", False)
             )
+        elif isinstance(edge_data, Edge):
+            # Handle Edge objects directly
+            edge = edge_data
         else:
-            # Handle full edge objects
+            # Handle dict objects as full edge data
             edge = Edge.model_validate(edge_data)
         
         graph.add_edge(edge)
@@ -184,18 +183,22 @@ def build_graph(input: BuildGraphInput) -> Graph:
     # Create and add clusters
     if input.clusters:
         for cluster_data in input.clusters:
-            if "node_ids" in cluster_data:
+            if isinstance(cluster_data, dict) and "node_ids" in cluster_data:
                 # Handle cluster data with node IDs
                 cluster = Cluster(name=cluster_data["name"])
                 for node_id in cluster_data["node_ids"]:
                     if node_id in node_map:
                         cluster.add_node(node_map[node_id])
+            elif isinstance(cluster_data, Cluster):
+                # Handle Cluster objects directly
+                cluster = cluster_data
             else:
-                # Handle full cluster objects
+                # Handle dict objects as full cluster data
                 cluster = Cluster.model_validate(cluster_data)
             
             graph.add_cluster(cluster)
     
+    logger.info(f"Graph built successfully: {graph.name} with {len(graph.nodes)} nodes, {len(graph.edges)} edges")
     return graph
 
 
@@ -209,6 +212,8 @@ def add_to_graph(input: AddToGraphInput) -> Graph:
     Returns:
         Graph: Updated graph object
     """
+    logger.debug(f"Adding to graph: nodes={len(input.nodes or [])}, edges={len(input.edges or [])}")
+    
     # Use the provided graph object
     graph = input.graph
     
@@ -224,7 +229,7 @@ def add_to_graph(input: AddToGraphInput) -> Graph:
     # Add new edges
     if input.edges:
         for edge_data in input.edges:
-            if "source_id" in edge_data:
+            if isinstance(edge_data, dict) and "source_id" in edge_data:
                 source_node = node_map[edge_data["source_id"]]
                 target_node = node_map[edge_data["target_id"]]
                 edge = Edge(
@@ -233,6 +238,9 @@ def add_to_graph(input: AddToGraphInput) -> Graph:
                     forward=edge_data.get("forward", False),
                     reverse=edge_data.get("reverse", False)
                 )
+            elif isinstance(edge_data, Edge):
+                # Handle Edge objects directly
+                edge = edge_data
             else:
                 edge = Edge.model_validate(edge_data)
             
@@ -241,16 +249,20 @@ def add_to_graph(input: AddToGraphInput) -> Graph:
     # Add new clusters
     if input.clusters:
         for cluster_data in input.clusters:
-            if "node_ids" in cluster_data:
+            if isinstance(cluster_data, dict) and "node_ids" in cluster_data:
                 cluster = Cluster(name=cluster_data["name"])
                 for node_id in cluster_data["node_ids"]:
                     if node_id in node_map:
                         cluster.add_node(node_map[node_id])
+            elif isinstance(cluster_data, Cluster):
+                # Handle Cluster objects directly
+                cluster = cluster_data
             else:
                 cluster = Cluster.model_validate(cluster_data)
             
             graph.add_cluster(cluster)
     
+    logger.info(f"Components added to graph successfully: {graph.name}")
     return graph
 
 
@@ -264,6 +276,8 @@ def validate_graph(input: ValidateGraphInput) -> ValidationResult:
     Returns:
         ValidationResult: Validation result with errors if any
     """
+    logger.debug("Validating graph structure")
+    
     graph = Graph.model_validate(input.graph_data)
     errors = []
     
@@ -281,7 +295,13 @@ def validate_graph(input: ValidateGraphInput) -> ValidationResult:
             if node.id not in node_ids:
                 errors.append(f"Cluster '{cluster_name}' references non-existent node: {node.id}")
     
-    return ValidationResult(valid=len(errors) == 0, errors=errors)
+    result = ValidationResult(valid=len(errors) == 0, errors=errors)
+    if result.valid:
+        logger.info("Graph validation successful")
+    else:
+        logger.warning(f"Graph validation failed with {len(errors)} errors: {errors}")
+    
+    return result
 
 
 @tool(args_schema=GraphToJsonInput)
@@ -294,8 +314,13 @@ def graph_to_json(input: GraphToJsonInput) -> str:
     Returns:
         str: JSON string representation of the graph
     """
+    logger.debug("Converting graph to JSON")
+    
     graph = Graph.model_validate(input.graph_data)
-    return graph.model_dump_json(indent=2)
+    json_result = graph.model_dump_json(indent=2)
+    
+    logger.info(f"Graph converted to JSON successfully: {len(json_result)} characters")
+    return json_result
 
 
 @tool(args_schema=GenerateDiagramInput)
@@ -309,6 +334,8 @@ def generate_diagram(input: GenerateDiagramInput) -> DiagramResult:
         DiagramResult: Generation result with success status and file path
     """
     try:
+        logger.debug(f"Generating diagram, output_file={input.output_file}")
+        
         graph = Graph.model_validate(input.graph_data)
         
         # Generate diagram using the existing to_diagrams method
@@ -320,9 +347,11 @@ def generate_diagram(input: GenerateDiagramInput) -> DiagramResult:
         else:
             output_file = input.output_file
         
+        logger.info(f"Diagram generated successfully: {output_file}")
         return DiagramResult(success=True, file_path=output_file, error=None)
     
     except Exception as e:
+        logger.error(f"Diagram generation failed: {str(e)}")
         return DiagramResult(success=False, file_path=None, error=str(e))
 
 
