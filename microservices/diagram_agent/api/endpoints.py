@@ -90,7 +90,7 @@ async def generate_diagram(request: DiagramRequest):
         return response
     
     except Exception as e:
-        logger.error(f"Diagram generation request failed: {str(e)}")
+        logger.exception(f"Diagram generation request failed: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Diagram generation failed: {str(e)}")
 
 
@@ -120,7 +120,7 @@ async def chat_endpoint(request: ChatRequest):
         return chat_response
     
     except Exception as e:
-        logger.error(f"Chat request failed for session {request.session_id}: {str(e)}")
+        logger.exception(f"Chat request failed for session {request.session_id}: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Chat failed: {str(e)}")
 
 

@@ -73,15 +73,16 @@ class GraphToJsonInput(BaseModel):
 
 class GenerateDiagramInput(BaseModel):
     """Input schema for diagram generation."""
-    graph_data: Dict[str, Any] = Field(..., description="Graph data as dictionary")
+    graph: Graph = Field(..., description="Graph")
     output_file: Optional[str] = Field(None, description="Optional output file name")
 
 
 class DiagramResult(BaseModel):
     """Diagram generation result schema."""
     success: bool = Field(..., description="Whether diagram generation succeeded")
-    file_path: Optional[str] = Field(None, description="Generated diagram file path")
-    error: Optional[str] = Field(None, description="Error message if generation failed")
+    file_path: str | None = Field(None, description="Generated diagram file path")
+    bytestring: bytes | None = Field(None, description="Generated diagram bytestring")
+    error: str | None = Field(None, description="Error message if generation failed")
 
 
 class ListResourcesByProviderInput(BaseModel):
@@ -318,23 +319,6 @@ def validate_graph(input: ValidateGraphInput) -> ValidationResult:
     return result
 
 
-@tool(args_schema=GraphToJsonInput)
-def graph_to_json(input: GraphToJsonInput) -> str:
-    """Convert graph to JSON string.
-    
-    Args:
-        input: Graph to JSON conversion parameters
-        
-    Returns:
-        str: JSON string representation of the graph
-    """
-    logger.debug("Converting graph to JSON")
-    
-    graph = Graph.model_validate(input.graph_data)
-    json_result = graph.model_dump_json(indent=2)
-    
-    logger.info(f"Graph converted to JSON successfully: {len(json_result)} characters")
-    return json_result
 
 
 @tool(args_schema=GenerateDiagramInput)
@@ -350,22 +334,21 @@ def generate_diagram(input: GenerateDiagramInput) -> DiagramResult:
     try:
         logger.debug(f"Generating diagram, output_file={input.output_file}")
         
-        graph = Graph.model_validate(input.graph_data)
-        
         # Generate diagram using the existing to_diagrams method
-        graph.to_diagrams()
+        diagram = input.graph.to_diagrams()
         
         # Determine output file name
         if not input.output_file:
-            output_file = f"{graph.name.lower().replace(' ', '_')}.png"
+            output_file = f"{input.graph.name.lower().replace(' ', '_')}.png"
         else:
             output_file = input.output_file
         
         logger.info(f"Diagram generated successfully: {output_file}")
-        return DiagramResult(success=True, file_path=output_file, error=None)
+        return DiagramResult(success=True, file_path=output_file, error=None,
+                             bytestring=diagram._repr_png_())
     
     except Exception as e:
-        logger.error(f"Diagram generation failed: {str(e)}")
+        logger.exception(f"Diagram generation failed: {str(e)}")
         return DiagramResult(success=False, file_path=None, error=str(e))
 
 
@@ -400,7 +383,7 @@ def list_all_providers() -> List[str]:
         return providers
         
     except Exception as e:
-        logger.error(f"Failed to list providers: {str(e)}")
+        logger.exception(f"Failed to list providers: {str(e)}")
         return []
 
 
@@ -432,10 +415,10 @@ def list_resources_by_provider(input: ListResourcesByProviderInput) -> List[str]
         return resources
         
     except ImportError:
-        logger.error(f"Provider '{input.provider}' not found")
+        logger.exception(f"Provider '{input.provider}' not found")
         return []
     except Exception as e:
-        logger.error(f"Failed to list resources for {input.provider}: {str(e)}")
+        logger.exception(f"Failed to list resources for {input.provider}: {str(e)}")
         return []
 
 
@@ -469,12 +452,28 @@ def list_nodes_by_resource(input: ListNodesByResourceInput) -> List[str]:
         return nodes
         
     except ImportError:
-        logger.error(f"Resource '{input.provider}.{input.resource}' not found")
+        logger.exception(f"Resource '{input.provider}.{input.resource}' not found")
         return []
     except Exception as e:
-        logger.error(f"Failed to list nodes for {input.provider}.{input.resource}: {str(e)}")
+        logger.exception(f"Failed to list nodes for {input.provider}.{input.resource}: {str(e)}")
         return []
 
+
+# Tool sets for different nodes
+PLANNER_TOOLS = [
+    list_all_providers,
+    list_resources_by_provider,
+    list_nodes_by_resource
+]
+
+EXECUTOR_TOOLS = [
+    create_node,
+    create_edge,
+    create_cluster,
+    add_to_graph,
+    validate_graph,
+    build_graph
+]
 
 # List of all available tools for easy import
 ALL_GRAPH_TOOLS = [
@@ -484,7 +483,6 @@ ALL_GRAPH_TOOLS = [
     build_graph,
     add_to_graph,
     validate_graph,
-    graph_to_json,
     generate_diagram,
     list_all_providers,
     list_resources_by_provider,

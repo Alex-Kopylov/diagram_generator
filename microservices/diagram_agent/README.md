@@ -168,7 +168,6 @@ The agent includes these native tools:
 4. **build_graph**: Construct complete graphs
 5. **add_to_graph**: Extend existing graphs
 6. **validate_graph**: Verify graph structure
-7. **graph_to_json**: Export graph data
 8. **generate_diagram**: Render final diagrams
 
 ## 🎨 Example Use Cases
