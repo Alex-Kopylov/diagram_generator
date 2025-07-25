@@ -9,6 +9,7 @@ import time
 from typing import Dict, Any, Optional
 from typing_extensions import TypedDict
 from langgraph.graph import StateGraph, START, END
+from langgraph.prebuilt import ToolNode
 
 from langchain_core.messages import HumanMessage, SystemMessage, AIMessage, ToolMessage, BaseMessage
 from pydantic import BaseModel, Field
@@ -61,13 +62,13 @@ class DiagramGenerationResult(BaseModel):
 
 def planner_node(state: DiagramState) -> DiagramState:
     """
-    Planner node that creates a detailed execution plan.
+    Planner node that creates a detailed execution plan and executes discovery tools.
     
     Args:
         state: Current diagram workflow state
         
     Returns:
-        Updated state with generated plan
+        Updated state with generated plan and tool results
     """
     logger.info("---PLANNER NODE---")
     try:
@@ -79,16 +80,36 @@ def planner_node(state: DiagramState) -> DiagramState:
         prompt_content = f"Create a detailed plan for: {state.message}"
         logger.info(f"LLM Call - Model: {settings.model_name}, Temperature: {settings.temperature}, Agent: planner, Prompt: {prompt_content}")
         
+        # Create messages for conversation
+        messages = [
+            SystemMessage(content=DIAGRAM_PLANNER_PROMPT),
+            HumanMessage(content=prompt_content)
+        ]
+        
         # Create plan using the planner agent
         start_time = time.time()
-        result: BaseMessage = llm.invoke([
-                SystemMessage(content=DIAGRAM_PLANNER_PROMPT),
-                HumanMessage(content=prompt_content)
-            ],
-        )
+        
+        # Execute tool calls in a loop until no more tool calls are needed
+        tool_node = ToolNode(PLANNER_TOOLS)
+        
+        while True:
+            # Get LLM response
+            result: AIMessage = llm.invoke(messages)
+            messages.append(result)
+            
+            # Check if there are tool calls to execute
+            if result.tool_calls:
+                logger.info(f"Executing {len(result.tool_calls)} tool calls")
+                # Execute tools and get results
+                tool_messages = tool_node.invoke({"messages": messages})
+                # Add tool results to messages
+                messages.extend(tool_messages["messages"])
+            else:
+                # No more tool calls, we're done
+                break
         
         # Log LLM response
-        logger.info(result)
+        logger.info(f"Planner completed with {len(messages)} messages")
         plan = result.content if result.content else "No plan generated"
 
         state.plan = plan
@@ -106,13 +127,13 @@ def planner_node(state: DiagramState) -> DiagramState:
 
 def executor_node(state: DiagramState) -> DiagramState:
     """
-    Executor node that executes the generated plan.
+    Executor node that executes the generated plan and builds the graph.
     
     Args:
         state: Current diagram workflow state with plan
         
     Returns:
-        Updated state with execution result
+        Updated state with execution result and built graph
     """
     logger.info("---EXECUTOR NODE---")
     try:
@@ -130,7 +151,7 @@ def executor_node(state: DiagramState) -> DiagramState:
         prompt_content = f"Execute this plan and MUST end with build_graph: {state.plan}"
         logger.info(f"LLM Call - Model: {settings.model_name}, Temperature: {settings.temperature}, Agent: executor, Prompt: {prompt_content}")
         
-        # Execute the plan using direct LLM invocation with tool execution
+        # Execute the plan using tool execution loop
         start_time = time.time()
         
         messages = [
@@ -138,32 +159,57 @@ def executor_node(state: DiagramState) -> DiagramState:
             HumanMessage(content=prompt_content)
         ]
         
-        # Use LangGraph's prebuilt create_react_agent for proper tool execution
-        from langgraph.prebuilt import create_react_agent
+        # Create tool node for executor tools
+        tool_node = ToolNode(EXECUTOR_TOOLS)
+        built_graph = None
         
-        # Create a simple executor that will run tools and return the final graph
-        graph_result = None
-        try:
-            # Invoke the LLM with tools - it should automatically execute them
-            result = llm.invoke(messages)
+        # Execute tool calls in a loop until completion
+        while True:
+            # Get LLM response
+            result: AIMessage = llm.invoke(messages)
+            messages.append(result)
             
-            # For now, assume the executor creates a simple graph structure
-            # This would need to be properly implemented based on actual tool execution
-            from core.graph_structure import Graph, Node, Edge, Direction
-            
-            # Create a placeholder graph - in practice this would come from tool execution
-            sample_graph = Graph(name="Generated Diagram", direction=Direction.LEFT_RIGHT)
-            
-            # The executor should have built the actual graph via tool calls
-            # For now, we'll create a minimal working graph
-            state.graph = sample_graph
-            state.result = result.content if result.content else "Execution completed"
-            state.success = True
-            
-        except Exception as tool_error:
-            logger.error(f"Tool execution failed: {str(tool_error)}")
-            state.success = False
-            state.error = f"Tool execution failed: {str(tool_error)}"
+            # Check if there are tool calls to execute
+            if result.tool_calls:
+                logger.info(f"Executing {len(result.tool_calls)} tool calls")
+                # Execute tools and get results
+                tool_result = tool_node.invoke({"messages": messages})
+                # Add tool results to messages  
+                messages.extend(tool_result["messages"])
+                
+                # Check if build_graph was called by looking at tool calls and responses
+                for i, tool_call in enumerate(result.tool_calls):
+                    if tool_call['name'] == 'build_graph':
+                        # Find corresponding tool message in responses
+                        if i < len(tool_result["messages"]):
+                            tool_msg = tool_result["messages"][i]
+                            if hasattr(tool_msg, 'content'):
+                                # The build_graph tool returns a Graph object as content
+                                try:
+                                    # The content should be the Graph object directly
+                                    built_graph = tool_msg.content
+                                    logger.info("Graph successfully built by executor")
+                                    break
+                                except Exception as graph_error:
+                                    logger.error(f"Failed to extract graph: {graph_error}")
+                
+                # If we found a built graph, we can stop
+                if built_graph:
+                    break
+            else:
+                # No more tool calls, we're done
+                break
+        
+        # Set the graph in state
+        if built_graph:
+            state.graph = built_graph
+        else:
+            logger.warning("No graph was built during execution, creating empty graph")
+            from core.graph_structure import Graph, Direction
+            state.graph = Graph(name="Generated Diagram", direction=Direction.LEFT_RIGHT)
+        
+        state.result = result.content if result.content else "Execution completed"
+        state.success = True
         
         duration_ms = (time.time() - start_time) * 1000
         logger.info(f"Executor completed plan execution in {duration_ms:.2f}ms")
