@@ -135,16 +135,7 @@ The service implements a **layered architecture** that completely abstracts the 
 - **Type Safety**: Pydantic validation ensures data integrity throughout the workflow
 
 ### 2. Tool-Based Interface (`tools/graph_tools.py`)
-**Discovery Tools** (Planner Agent):
-- `list_all_providers()` - Explore available cloud providers
-- `list_resources_by_provider()` - Find resource categories  
-- `list_nodes_by_resource()` - Get specific node types
-- `validate_node_exists()` - Verify component availability
-
-**Construction Tools** (Executor Agent):
-- `create_node()`, `create_edge()`, `create_cluster()` - Build graph components
-- `build_graph()`, `add_to_graph()` - Assemble complete structures
-- `validate_graph()` - Ensure structural integrity
+The service provides **15+ native tools** split between discovery (planner) and construction (executor) phases. See [Tool Architecture](#tool-architecture) for complete listings.
 
 ### 3. Three-Stage Workflow
 ```
@@ -271,7 +262,7 @@ curl -X POST "http://localhost:8000/generate-diagram" \
 
 ### Planner Tools (Discovery)
 - `list_all_providers`: Discover available cloud providers
-- `list_resources_by_provider`: Find resource categories
+- `list_resources_by_provider`: Find resource categories  
 - `list_nodes_by_resource`: Get specific node types
 - `validate_node_exists`: Verify node class availability
 
