@@ -122,7 +122,6 @@ graph TD
 * **Native Tool Integration**: Custom tools that operate the diagrams package without exposing implementation details to the LLM
 * **Stateless Operation**: No user sessions or persistent state required
 * **LangGraph Workflow**: React-style agent pattern with conditional routing
-* **Comprehensive Provider Support**: Supports all if the nodes from diagrams.
 * **Fallback Model Support**: Built-in fallback to alternative LLM models
 
 ---
@@ -133,7 +132,6 @@ The service implements a **layered architecture** that completely abstracts the 
 
 ### 1. Custom Data Models (`core/graph_structure.py`)
 - **Pydantic Models**: Created `Node`, `Edge`, `Cluster`, `Graph` models that mirror but simplify diagrams library primitives
-- **LLM-Friendly Attributes**: Uses simple strings like `path: "diagrams.aws.compute.EC2"` instead of complex import statements
 - **Type Safety**: Pydantic validation ensures data integrity throughout the workflow
 
 ### 2. Tool-Based Interface (`tools/graph_tools.py`)
@@ -176,20 +174,6 @@ def should_continue_planner(state: PlannerState):
     return "continue" if last_message.tool_calls else "end"
 ```
 
-**Advantages of Custom Implementation**:
-- **Full Control**: Complete visibility into the reasoning and action loop
-- **State Management**: Custom state tracking for graph objects across tool calls
-- **Tool Integration**: Seamless integration with domain-specific tools
-- **Debugging**: Clear observability into each step of the agent workflow
-- **No Framework Lock-in**: Not dependent on LangGraph's prebuilt agent abstractions
-
-### Key Benefits
-- **LLM Isolation**: LLMs never see complex import statements or library-specific syntax
-- **Clean Separation**: Planning vs execution vs rendering concerns are isolated
-- **Library Flexibility**: Can swap underlying diagram libraries without changing LLM interface
-- **Composable Operations**: High-level tools that LLMs can reason about effectively
-- **Transparent React Pattern**: Full control over reasoning and action cycles without framework abstractions
-
 ---
 
 ## Requirements Met
@@ -201,7 +185,7 @@ def should_continue_planner(state: PlannerState):
 ✅ **Custom Diagrams Tools**: 15+ native tools for graph construction and validation  
 ✅ **LLM Integration**: OpenAI GPT models with Anthropic Claude fallback  
 ✅ **Visible Prompt Logic**: No opaque framework calls.
-✅ **Multiple Node Types**: Support all of them.
+⭐ **Multiple Node Types**: Support all of them.
 
 ---
 
