@@ -127,6 +127,71 @@ graph TD
 
 ---
 
+## Library Abstraction Strategy
+
+The service implements a **layered architecture** that completely abstracts the Python `diagrams` library complexity from LLMs:
+
+### 1. Custom Data Models (`core/graph_structure.py`)
+- **Pydantic Models**: Created `Node`, `Edge`, `Cluster`, `Graph` models that mirror but simplify diagrams library primitives
+- **LLM-Friendly Attributes**: Uses simple strings like `path: "diagrams.aws.compute.EC2"` instead of complex import statements
+- **Type Safety**: Pydantic validation ensures data integrity throughout the workflow
+
+### 2. Tool-Based Interface (`tools/graph_tools.py`)
+**Discovery Tools** (Planner Agent):
+- `list_all_providers()` - Explore available cloud providers
+- `list_resources_by_provider()` - Find resource categories  
+- `list_nodes_by_resource()` - Get specific node types
+- `validate_node_exists()` - Verify component availability
+
+**Construction Tools** (Executor Agent):
+- `create_node()`, `create_edge()`, `create_cluster()` - Build graph components
+- `build_graph()`, `add_to_graph()` - Assemble complete structures
+- `validate_graph()` - Ensure structural integrity
+
+### 3. Three-Stage Workflow
+```
+Planner (Discovery) → Executor (Construction) → Graph Builder (Rendering)
+```
+
+- **Planner Agent**: Uses discovery tools to explore available components and create execution plans
+- **Executor Agent**: Uses construction tools to build internal graph representation following the plan
+- **Graph Builder**: Converts internal `Graph` model to actual `diagrams` objects via `to_diagrams()` method
+
+### 4. Custom React Agent Implementation
+
+**Built from Scratch**: Instead of using LangGraph's prebuilt `create_react_agent()`, both planner and executor agents implement the **React pattern manually**:
+
+```python
+# Custom React loop implementation
+def create_planner_agent_node():
+    def planner_agent(state: PlannerState, config: RunnableConfig):
+        llm = init_chat_model(...).bind_tools(PLANNER_TOOLS)
+        response = llm.invoke(state["messages"], config)
+        return {"messages": [response]}
+    return planner_agent
+
+# Conditional routing logic
+def should_continue_planner(state: PlannerState):
+    last_message = state["messages"][-1]
+    return "continue" if last_message.tool_calls else "end"
+```
+
+**Advantages of Custom Implementation**:
+- **Full Control**: Complete visibility into the reasoning and action loop
+- **State Management**: Custom state tracking for graph objects across tool calls
+- **Tool Integration**: Seamless integration with domain-specific tools
+- **Debugging**: Clear observability into each step of the agent workflow
+- **No Framework Lock-in**: Not dependent on LangGraph's prebuilt agent abstractions
+
+### Key Benefits
+- **LLM Isolation**: LLMs never see complex import statements or library-specific syntax
+- **Clean Separation**: Planning vs execution vs rendering concerns are isolated
+- **Library Flexibility**: Can swap underlying diagram libraries without changing LLM interface
+- **Composable Operations**: High-level tools that LLMs can reason about effectively
+- **Transparent React Pattern**: Full control over reasoning and action cycles without framework abstractions
+
+---
+
 ## Requirements Met
 
 ✅ **Python + FastAPI**: Async framework with full OpenAPI documentation  
