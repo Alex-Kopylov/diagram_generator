@@ -6,6 +6,7 @@ This service provides diagram generation capabilities using native LangGraph too
 
 import uvicorn
 
+from api.endpoints import app  # noqa
 from config.logger import get_logger_settings, setup_logging
 from config.settings import get_settings
 

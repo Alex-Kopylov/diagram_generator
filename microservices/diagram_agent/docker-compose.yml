@@ -1,0 +1,38 @@
+services:
+  diagram-agent:
+    build: .
+    ports:
+      - "8000:8000"
+    environment:
+      # OpenAI Configuration
+      - MODEL_API_KEY=${MODEL_API_KEY}
+      - FALLBACK_MODEL_API_KEY=${FALLBACK_MODEL_API_KEY}
+      - MODEL_NAME=${MODEL_NAME:-gpt-4-turbo}
+      - FALLBACK_MODEL_NAME=${FALLBACK_MODEL_NAME:-claude-3-sonnet-20240229}
+      - TEMPERATURE=${TEMPERATURE:-0.0}
+      
+      # LangGraph Configuration
+      - GRAPH_RENDERER=${GRAPH_RENDERER:-png}
+      - LANGCHAIN_TRACING_V2=${LANGCHAIN_TRACING_V2:-false}
+      
+      # Application Configuration
+      - HOST=0.0.0.0
+      - PORT=8000
+      - RELOAD=${RELOAD:-false}
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+      - DEBUG=${DEBUG:-false}
+      
+      # Diagram Configuration
+      - DEFAULT_OUTPUT_FORMAT=${DEFAULT_OUTPUT_FORMAT:-png}
+      - TEMP_DIR=/tmp/diagram_generator
+    volumes:
+      - diagram_temp:/tmp/diagram_generator
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+volumes:
+  diagram_temp:

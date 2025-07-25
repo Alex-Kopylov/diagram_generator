@@ -61,7 +61,6 @@ class DiagramState(BaseModel):
         diagram_result: Final diagram generation result
         success: Whether the workflow completed successfully
         error: Error message if workflow failed
-        file_path: Path to generated diagram file
     """
     message: str = Field(..., description="Original user message describing the diagram")
     plan: str | None = Field(None, description="Generated execution plan from the planner")
@@ -70,14 +69,12 @@ class DiagramState(BaseModel):
     diagram_result: dict[str, Any] | None = Field(None, description="Final diagram generation result")
     success: bool = Field(..., description="Whether the workflow completed successfully")
     error: str | None = Field(None, description="Error message if workflow failed")
-    file_path: str | None = Field(None, description="Path to generated diagram file")
 
 
 class DiagramGenerationResult(BaseModel):
     """Result of diagram generation process."""
     success: bool = Field(..., description="Whether diagram generation succeeded")
     message: str = Field(..., description="Success or error message")
-    file_path: str | None = Field(None, description="Path to generated diagram file")
     bytestring_base64: str | None = Field(None, description="Generated diagram as base64 encoded string")
     graph_data: Graph | None = Field(None, description="Graph data used for diagram")
 
@@ -165,8 +162,9 @@ def should_continue_executor(state: ExecutorState):
         if tool_call["name"] == "build_graph":
             # Check if this is the first time we're seeing build_graph
             # If graph is already built, we should end
-            if state.get("graph") is not None:
-                return "end"
+            if graph:=state.get("graph"):
+                if graph.node_count() > 0:
+                    return "end"
 
     return "continue"
 
@@ -405,12 +403,10 @@ def graph_builder_node(state: DiagramState) -> DiagramState:
         # Generate diagram by calling the tool with proper input
         diagram_result = generate_diagram.invoke({
             "graph": state.graph,
-            "output_file": state.file_path
         })
 
         # Update state with complete diagram generation results
         state.diagram_result = diagram_result.model_dump()
-        state.file_path = diagram_result.file_path
         state.success = diagram_result.success
 
         if not diagram_result.success:
@@ -419,8 +415,8 @@ def graph_builder_node(state: DiagramState) -> DiagramState:
         else:
             # Set success message if not already set
             if not state.result:
-                state.result = f"Diagram generated successfully: {diagram_result.file_path}"
-            logger.info(f"Diagram generated successfully: {diagram_result.file_path}")
+                state.result = "Diagram generated successfully"
+            logger.info("Diagram generated successfully")
 
         return state
 
@@ -501,7 +497,6 @@ class DiagramAgent:
                 diagram_result=None,
                 success=False,
                 error=None,
-                file_path=output_file,
             )
 
             # Execute the workflow
@@ -521,7 +516,6 @@ class DiagramAgent:
             return DiagramGenerationResult(
                 success=final_state["success"],
                 message=final_state["result"] or final_state["error"] or "Workflow completed",
-                file_path=final_state["file_path"],
                 bytestring_base64=bytestring_base64_data,
                 graph_data=final_state["graph"]
             )
@@ -533,7 +527,6 @@ class DiagramAgent:
             return DiagramGenerationResult(
                 success=False,
                 message=f"Diagram generation workflow failed: {str(e)}",
-                file_path=None,
                 bytestring_base64=None,
                 graph_data=None
             )

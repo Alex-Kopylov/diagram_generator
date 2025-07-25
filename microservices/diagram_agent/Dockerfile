@@ -31,4 +31,4 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
     CMD curl -f http://localhost:8000/health || exit 1
 
 # Run the diagram agent API
-CMD ["uv", "run", "uvicorn", "diagram_agent.api.endpoints:app", "--host", "0.0.0.0", "--port", "8000"]
+CMD ["uv", "run", "uvicorn", "api.endpoints:app", "--host", "0.0.0.0", "--port", "8000"]

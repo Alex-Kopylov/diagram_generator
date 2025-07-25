@@ -26,7 +26,6 @@ class ValidationResult(BaseModel):
 class DiagramResult(BaseModel):
     """Diagram generation result schema."""
     success: bool = Field(..., description="Whether diagram generation succeeded")
-    file_path: str | None = Field(None, description="Generated diagram file path")
     bytestring: bytes | None = Field(None, description="Generated diagram bytestring (internal use)")
     error: str | None = Field(None, description="Error message if generation failed")
 
@@ -358,12 +357,12 @@ def generate_diagram(graph: Graph, output_file: str | None = None) -> DiagramRes
             output_file = f"{graph.name.lower().replace(' ', '_')}.png"
 
         logger.info(f"Diagram generated successfully: {output_file}")
-        return DiagramResult(success=True, file_path=output_file, error=None,
+        return DiagramResult(success=True, error=None,
                              bytestring=diagram._repr_png_())
 
     except Exception as e:
         logger.exception(f"Diagram generation failed: {str(e)}")
-        return DiagramResult(success=False, file_path=None, error=str(e), bytestring=None)
+        return DiagramResult(success=False, error=str(e), bytestring=None)
 
 
 @tool(return_direct=True)
