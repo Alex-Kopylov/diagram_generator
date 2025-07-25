@@ -365,12 +365,10 @@ def graph_builder_node(state: DiagramState) -> DiagramState:
             return state
         
         # Generate diagram by calling the tool with proper input
-        from tools.graph_tools import GenerateDiagramInput
-        diagram_input = GenerateDiagramInput(
-            graph=state.graph,
-            output_file=state.file_path
-        )
-        diagram_result = generate_diagram.invoke(diagram_input.model_dump())
+        diagram_result = generate_diagram.invoke({
+            "graph": state.graph,
+            "output_file": state.file_path
+        })
         
         # Update state with diagram result
         state.diagram_result = diagram_result.model_dump()

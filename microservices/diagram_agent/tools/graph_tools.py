@@ -18,63 +18,10 @@ from loguru import logger
 from core.graph_structure import Node, Edge, Cluster, Graph, Direction
 
 
-class CreateNodeInput(BaseModel):
-    """Input schema for creating a new graph node."""
-    name: str = Field(..., description="Node name (e.g., 'diagrams.aws.compute.EC2')")
-    id: Optional[str] = Field(None, description="Optional custom node ID")
-
-
-class CreateEdgeInput(BaseModel):
-    """Input schema for creating a new graph edge."""
-    source_id: str = Field(..., description="Source node ID")
-    target_id: str = Field(..., description="Target node ID")
-    forward: bool = Field(False, description="Enable forward direction arrow")
-    reverse: bool = Field(False, description="Enable reverse direction arrow")
-
-
-class CreateClusterInput(BaseModel):
-    """Input schema for creating a cluster."""
-    name: str = Field(..., description="Cluster name")
-    node_ids: List[str] = Field(..., description="List of node IDs to include in cluster")
-
-
-class BuildGraphInput(BaseModel):
-    """Input schema for building a complete graph."""
-    name: str = Field(..., description="Graph name")
-    direction: Direction = Field(Direction.LEFT_RIGHT, description="Graph layout direction")
-    nodes: List[Node] = Field(..., description="Array of node objects")
-    edges: List[Union[Edge, Dict[str, Any]]] = Field(..., description="Array of edge objects or edge data")
-    clusters: Optional[List[Union[Cluster, Dict[str, Any]]]] = Field(None, description="Array of cluster objects or cluster data")
-
-
-class AddToGraphInput(BaseModel):
-    """Input schema for adding components to existing graph."""
-    graph: Graph = Field(..., description="Existing graph object")
-    nodes: Optional[List[Node]] = Field(None, description="Nodes to add")
-    edges: Optional[List[Union[Edge, Dict[str, Any]]]] = Field(None, description="Edges to add")
-    clusters: Optional[List[Union[Cluster, Dict[str, Any]]]] = Field(None, description="Clusters to add")
-
-
 class ValidationResult(BaseModel):
     """Graph validation result schema."""
     valid: bool = Field(..., description="Whether the graph is valid")
     errors: List[str] = Field(..., description="List of validation errors")
-
-
-class ValidateGraphInput(BaseModel):
-    """Input schema for graph validation."""
-    graph_data: Dict[str, Any] = Field(..., description="Graph data as dictionary")
-
-
-class GraphToJsonInput(BaseModel):
-    """Input schema for graph to JSON conversion."""
-    graph_data: Dict[str, Any] = Field(..., description="Graph data as dictionary")
-
-
-class GenerateDiagramInput(BaseModel):
-    """Input schema for diagram generation."""
-    graph: Graph = Field(..., description="Graph")
-    output_file: Optional[str] = Field(None, description="Optional output file name")
 
 
 class DiagramResult(BaseModel):
@@ -85,97 +32,95 @@ class DiagramResult(BaseModel):
     error: str | None = Field(None, description="Error message if generation failed")
 
 
-class ListResourcesByProviderInput(BaseModel):
-    """Input schema for listing resources by provider."""
-    provider: str = Field(..., description="Provider name (e.g., 'aws', 'gcp', 'azure')")
-
-
-class ListNodesByResourceInput(BaseModel):
-    """Input schema for listing nodes by provider and resource."""
-    provider: str = Field(..., description="Provider name (e.g., 'aws', 'gcp', 'azure')")
-    resource: str = Field(..., description="Resource category (e.g., 'compute', 'database', 'network')")
-
-
-@tool(args_schema=CreateNodeInput, return_direct=True) 
-def create_node(input: CreateNodeInput) -> Node:
+@tool(return_direct=True) 
+def create_node(name: str, id: Optional[str] = None) -> Node:
     """Create a new graph node.
     
     Args:
-        input: Node creation parameters
+        name: Node name (e.g., 'diagrams.aws.compute.EC2')
+        id: Optional custom node ID
         
     Returns:
         Node: Created node object
     """
-    if input.id:
-        return Node(name=input.name, id=input.id)
+    if id:
+        return Node(name=name, id=id)
     else:
-        return Node(name=input.name)
+        return Node(name=name)
 
 
-@tool(args_schema=CreateEdgeInput, return_direct=True)
-def create_edge(input: CreateEdgeInput) -> Edge:
+@tool(return_direct=True)
+def create_edge(source_id: str, target_id: str, forward: bool = False, reverse: bool = False) -> Edge:
     """Create a new graph edge between nodes.
     
     Args:
-        input: Edge creation parameters
+        source_id: Source node ID
+        target_id: Target node ID
+        forward: Enable forward direction arrow
+        reverse: Enable reverse direction arrow
         
     Returns:
         Edge: Created edge object
     """
     # Create dummy nodes for edge creation
-    source_node = Node(name="temp", id=input.source_id)
-    target_node = Node(name="temp", id=input.target_id)
+    source_node = Node(name="temp", id=source_id)
+    target_node = Node(name="temp", id=target_id)
     
     edge = Edge(
         source=source_node,
         target=target_node,
-        forward=input.forward,
-        reverse=input.reverse
+        forward=forward,
+        reverse=reverse
     )
     
     return edge
 
 
-@tool(args_schema=CreateClusterInput, return_direct=True)
-def create_cluster(input: CreateClusterInput) -> Cluster:
+@tool(return_direct=True)
+def create_cluster(name: str, node_ids: List[str]) -> Cluster:
     """Create a cluster containing specified nodes.
     
     Args:
-        input: Cluster creation parameters
+        name: Cluster name
+        node_ids: List of node IDs to include in cluster
         
     Returns:
         Cluster: Created cluster object
     """
-    cluster = Cluster(name=input.name)
+    cluster = Cluster(name=name)
     # Note: node_ids are provided but nodes need to be added separately
     # since we don't have access to the actual Node objects here
     return cluster
 
 
-@tool(args_schema=BuildGraphInput, return_direct=True)
-def build_graph(input: BuildGraphInput) -> Graph:
+@tool(return_direct=True)
+def build_graph(name: str, direction: Direction, nodes: List[Node], edges: List[Union[Edge, Dict[str, Any]]], clusters: Optional[List[Union[Cluster, Dict[str, Any]]]] = None) -> Graph:
     """Build a complete graph from components.
     
     Args:
-        input: Graph building parameters
+        name: Graph name
+        direction: Graph layout direction
+        nodes: Array of node objects
+        edges: Array of edge objects or edge data
+        clusters: Array of cluster objects or cluster data
         
     Returns:
         Graph: Complete graph object
     """
-    logger.debug(f"Building graph: name={input.name}, nodes={len(input.nodes)}, edges={len(input.edges)}")
+    logger.debug(f"Building graph: name={name}, nodes={len(nodes)}, edges={len(edges)}")
     
     # Create graph
-    graph = Graph(name=input.name, direction=input.direction)
+    graph = Graph(name=name, direction=direction)
     
     # Create and add nodes
     node_map = {}
-    for node in input.nodes:
+    for node in nodes:
         graph.add_node(node)
         node_map[node.id] = node
         logger.debug(f"Added node to graph: {node.id}")
     
     # Create and add edges
-    for edge_data in input.edges:
+    for edge_data in edges:
         if isinstance(edge_data, dict) and "source_id" in edge_data:
             # Handle edge data with node IDs
             source_node = node_map[edge_data["source_id"]]
@@ -196,8 +141,8 @@ def build_graph(input: BuildGraphInput) -> Graph:
         graph.add_edge(edge)
     
     # Create and add clusters
-    if input.clusters:
-        for cluster_data in input.clusters:
+    if clusters:
+        for cluster_data in clusters:
             if isinstance(cluster_data, dict) and "node_ids" in cluster_data:
                 # Handle cluster data with node IDs
                 cluster = Cluster(name=cluster_data["name"])
@@ -217,33 +162,33 @@ def build_graph(input: BuildGraphInput) -> Graph:
     return graph
 
 
-@tool(args_schema=AddToGraphInput, return_direct=True)
-def add_to_graph(input: AddToGraphInput) -> Graph:
+@tool(return_direct=True)
+def add_to_graph(graph: Graph, nodes: Optional[List[Node]] = None, edges: Optional[List[Union[Edge, Dict[str, Any]]]] = None, clusters: Optional[List[Union[Cluster, Dict[str, Any]]]] = None) -> Graph:
     """Add components to an existing graph.
     
     Args:
-        input: Graph addition parameters
+        graph: Existing graph object
+        nodes: Nodes to add
+        edges: Edges to add
+        clusters: Clusters to add
         
     Returns:
         Graph: Updated graph object
     """
-    logger.debug(f"Adding to graph: nodes={len(input.nodes or [])}, edges={len(input.edges or [])}")
-    
-    # Use the provided graph object
-    graph = input.graph
+    logger.debug(f"Adding to graph: nodes={len(nodes or [])}, edges={len(edges or [])}")
     
     # Create node map for existing nodes
     node_map = {node.id: node for node in graph.nodes}
     
     # Add new nodes
-    if input.nodes:
-        for node in input.nodes:
+    if nodes:
+        for node in nodes:
             graph.add_node(node)
             node_map[node.id] = node
     
     # Add new edges
-    if input.edges:
-        for edge_data in input.edges:
+    if edges:
+        for edge_data in edges:
             if isinstance(edge_data, dict) and "source_id" in edge_data:
                 source_node = node_map[edge_data["source_id"]]
                 target_node = node_map[edge_data["target_id"]]
@@ -262,8 +207,8 @@ def add_to_graph(input: AddToGraphInput) -> Graph:
             graph.add_edge(edge)
     
     # Add new clusters
-    if input.clusters:
-        for cluster_data in input.clusters:
+    if clusters:
+        for cluster_data in clusters:
             if isinstance(cluster_data, dict) and "node_ids" in cluster_data:
                 cluster = Cluster(name=cluster_data["name"])
                 for node_id in cluster_data["node_ids"]:
@@ -281,19 +226,19 @@ def add_to_graph(input: AddToGraphInput) -> Graph:
     return graph
 
 
-@tool(args_schema=ValidateGraphInput, return_direct=True)
-def validate_graph(input: ValidateGraphInput) -> ValidationResult:
+@tool(return_direct=True)
+def validate_graph(graph_data: Dict[str, Any]) -> ValidationResult:
     """Validate graph structure and connections.
     
     Args:
-        input: Graph validation parameters
+        graph_data: Graph data as dictionary
         
     Returns:
         ValidationResult: Validation result with errors if any
     """
     logger.debug("Validating graph structure")
     
-    graph = Graph.model_validate(input.graph_data)
+    graph = Graph.model_validate(graph_data)
     errors = []
     
     # Check for orphaned edges
@@ -321,27 +266,26 @@ def validate_graph(input: ValidateGraphInput) -> ValidationResult:
 
 
 
-@tool(args_schema=GenerateDiagramInput, return_direct=True)
-def generate_diagram(input: GenerateDiagramInput) -> DiagramResult:
+@tool(return_direct=True)
+def generate_diagram(graph: Graph, output_file: Optional[str] = None) -> DiagramResult:
     """Generate diagram file from graph.
     
     Args:
-        input: Diagram generation parameters
+        graph: Graph
+        output_file: Optional output file name
         
     Returns:
         DiagramResult: Generation result with success status and file path
     """
     try:
-        logger.debug(f"Generating diagram, output_file={input.output_file}")
+        logger.debug(f"Generating diagram, output_file={output_file}")
         
         # Generate diagram using the existing to_diagrams method
-        diagram = input.graph.to_diagrams()
+        diagram = graph.to_diagrams()
         
         # Determine output file name
-        if not input.output_file:
-            output_file = f"{input.graph.name.lower().replace(' ', '_')}.png"
-        else:
-            output_file = input.output_file
+        if not output_file:
+            output_file = f"{graph.name.lower().replace(' ', '_')}.png"
         
         logger.info(f"Diagram generated successfully: {output_file}")
         return DiagramResult(success=True, file_path=output_file, error=None,
@@ -387,18 +331,18 @@ def list_all_providers() -> List[str]:
         return []
 
 
-@tool(args_schema=ListResourcesByProviderInput, return_direct=True)
-def list_resources_by_provider(input: ListResourcesByProviderInput) -> List[str]:
+@tool(return_direct=True)
+def list_resources_by_provider(provider: str) -> List[str]:
     """List all resource categories for a specific provider.
     
     Args:
-        input: Provider specification
+        provider: Provider name (e.g., 'aws', 'gcp', 'azure')
         
     Returns:
         List[str]: List of resource categories (e.g., ['compute', 'database', 'network'])
     """
     try:
-        provider = input.provider.lower()
+        provider = provider.lower()
         resources = []
         
         # Import the provider module
@@ -415,26 +359,27 @@ def list_resources_by_provider(input: ListResourcesByProviderInput) -> List[str]
         return resources
         
     except ImportError:
-        logger.exception(f"Provider '{input.provider}' not found")
+        logger.exception(f"Provider '{provider}' not found")
         return []
     except Exception as e:
-        logger.exception(f"Failed to list resources for {input.provider}: {str(e)}")
+        logger.exception(f"Failed to list resources for {provider}: {str(e)}")
         return []
 
 
-@tool(args_schema=ListNodesByResourceInput, return_direct=True)
-def list_nodes_by_resource(input: ListNodesByResourceInput) -> List[str]:
+@tool(return_direct=True)
+def list_nodes_by_resource(provider: str, resource: str) -> List[str]:
     """List all available node classes for a specific provider and resource category.
     
     Args:
-        input: Provider and resource specification
+        provider: Provider name (e.g., 'aws', 'gcp', 'azure')
+        resource: Resource category (e.g., 'compute', 'database', 'network')
         
     Returns:
         List[str]: List of node class names (e.g., ['EC2', 'Lambda', 'ECS'])
     """
     try:
-        provider = input.provider.lower()
-        resource = input.resource.lower()
+        provider = provider.lower()
+        resource = resource.lower()
         nodes = []
         
         # Import the specific resource module
@@ -452,10 +397,10 @@ def list_nodes_by_resource(input: ListNodesByResourceInput) -> List[str]:
         return nodes
         
     except ImportError:
-        logger.exception(f"Resource '{input.provider}.{input.resource}' not found")
+        logger.exception(f"Resource '{provider}.{resource}' not found")
         return []
     except Exception as e:
-        logger.exception(f"Failed to list nodes for {input.provider}.{input.resource}: {str(e)}")
+        logger.exception(f"Failed to list nodes for {provider}.{resource}: {str(e)}")
         return []
 
 
