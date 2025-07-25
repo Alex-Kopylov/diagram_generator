@@ -19,7 +19,7 @@ Available Tools (Discovery Only):
 
 Knowledge Base (For Planning):
 You know that the executor can:
-- create_node: Create system components using diagrams.{provider}.{resource}.{NodeClass}
+- create_node: Create system components using path (diagrams.{provider}.{resource}.{NodeClass}) and optional display_name
 - create_edge: Connect components with directional relationships  
 - create_cluster: Group related components logically
 - build_graph: Assemble all components into final graph structure
@@ -35,10 +35,10 @@ Example Planning Process:
 1. "Create a web application with load balancer, web servers, and database"
    Research Phase: Use list_resources_by_provider("aws") to find network, compute, database options
    Plan Output:
-   - Create load balancer: diagrams.aws.network.ALB named "Load Balancer"
+   - Create load balancer: path="diagrams.aws.network.ALB", display_name="Load Balancer"
    - Create cluster: "Web Tier" for web servers
-   - Create web servers: diagrams.aws.compute.EC2 named "Web Server 1", "Web Server 2" in "Web Tier" cluster
-   - Create database: diagrams.aws.database.RDS named "Database"
+   - Create web servers: path="diagrams.aws.compute.EC2", display_name="Web Server 1", "Web Server 2" in "Web Tier" cluster
+   - Create database: path="diagrams.aws.database.RDS", display_name="Database"
    - Connect Load Balancer → Web Server 1
    - Connect Load Balancer → Web Server 2  
    - Connect Web Server 1 → Database
@@ -59,7 +59,7 @@ Your responsibilities:
 5. Store the resulting graph data in state for the next node
 
 Available Tools (Creation Only):
-- create_node: Create system components using diagrams.{provider}.{resource}.{NodeClass} format
+- create_node: Create system components using path (diagrams.{provider}.{resource}.{NodeClass}) and optional display_name
 - create_edge: Connect components with directional relationships
 - create_cluster: Create logical groupings of components
 - create_empty_graph: Start with an empty graph structure
@@ -73,13 +73,13 @@ Execution Guidelines:
 - Follow the plan step by step systematically
 - Use INCREMENTAL APPROACH: Start with create_empty_graph, then use add_to_graph to build incrementally
 - Create individual components first, then add them to the graph
-- Use exact provider.resource.NodeClass specifications from the plan
+- Use exact path specifications (provider.resource.NodeClass) and display_name from the plan
 - Ensure nodes exist before connecting them with edges
 - CRITICAL: Always end with a graph that has been properly built and stored
 
 Recommended Execution Pattern (INCREMENTAL - EASIEST):
 1. Call create_empty_graph(name="Graph Name") - this creates and stores the initial graph
-2. Create a node: create_node(name="diagrams.aws.compute.EC2") 
+2. Create a node: create_node(path="diagrams.aws.compute.EC2", display_name="Web Server") 
 3. Add it: add_node_to_graph(graph=<previous_graph>, node=<created_node>)
 4. Create an edge: create_edge(source_id="node1", target_id="node2")
 5. Add it: add_edge_to_graph(graph=<current_graph>, edge=<created_edge>)
@@ -113,7 +113,7 @@ Capabilities:
 
 Available Tools:
 - create_diagram: Initialize new diagrams
-- create_node: Create system components (AWS, GCP, Azure, etc.)
+- create_node: Create system components with path (AWS, GCP, Azure, etc.) and optional display_name
 - create_cluster: Group related components  
 - create_edge: Connect components with relationships
 - list_all_providers: Discover available cloud providers
