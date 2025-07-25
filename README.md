@@ -135,7 +135,7 @@ The service implements a **layered architecture** that completely abstracts the 
 - **Type Safety**: Pydantic validation ensures data integrity throughout the workflow
 
 ### 2. Tool-Based Interface (`tools/graph_tools.py`)
-The service provides **15+ native tools** split between discovery (planner) and construction (executor) phases. See [Tool Architecture](#tool-architecture) for complete listings.
+The service provides **14 native tools** split between discovery (planner) and construction (executor) phases. See [Tool Architecture](#tool-architecture) for complete listings.
 
 ### 3. Three-Stage Workflow
 ```
@@ -173,7 +173,7 @@ def should_continue_planner(state: PlannerState):
 ✅ **UV Package Management**: Modern Python package manager with lock files  
 ✅ **Stateless Service**: No database or session management required  
 ✅ **Docker + docker-compose**: Full containerization with health checks  
-✅ **Custom Diagrams Tools**: 15+ native tools for graph construction and validation  
+✅ **Custom Diagrams Tools**: 14 native tools for graph construction and validation  
 ✅ **LLM Integration**: OpenAI GPT models with Anthropic Claude fallback  
 ✅ **Visible Prompt Logic**: No opaque framework calls.
 ⭐ **Multiple Node Types**: Support all of them.
@@ -212,7 +212,7 @@ def should_continue_planner(state: PlannerState):
 
 2. **Health check**:
    ```bash
-   curl http://localhost:8000/health
+   curl http://localhost:3502/health
    ```
 
 ### Environment Variables
@@ -226,7 +226,7 @@ FALLBACK_MODEL_NAME=claude-3-5-sonnet
 
 # Service Configuration  
 HOST=0.0.0.0
-PORT=8000
+PORT=3502
 LOG_LEVEL=INFO
 RELOAD=false
 TEMPERATURE=0.1
@@ -241,8 +241,8 @@ TEMPERATURE=0.1
 * **POST `/generate-diagram`**: Generate diagram from natural language description
   - Input: `{"message": "description of diagram"}`
   - Output: PNG image (binary response)
-
-* **GET `/health`**: Service health check
+* **POST `/chat`**: Conversational diagram generation (not implemented)
+* **GET `/health`**: Service health check  
 * **GET `/`**: Service information and available endpoints
 * **GET `/docs`**: Interactive API documentation
 
@@ -250,7 +250,7 @@ TEMPERATURE=0.1
 
 ```bash
 # Generate a diagram
-curl -X POST "http://localhost:8000/generate-diagram" \
+curl -X POST "http://localhost:3502/generate-diagram" \
   -H "Content-Type: application/json" \
   -d '{"message": "Create AWS web architecture with ALB, EC2, and RDS"}' \
   --output diagram.png
@@ -261,17 +261,19 @@ curl -X POST "http://localhost:8000/generate-diagram" \
 ## Tool Architecture
 
 ### Planner Tools (Discovery)
-- `list_all_providers`: Discover available cloud providers
-- `list_resources_by_provider`: Find resource categories  
-- `list_nodes_by_resource`: Get specific node types
-- `validate_node_exists`: Verify node class availability
+
+* `list_all_providers`: Discover available cloud providers
+* `list_resources_by_provider`: Find resource categories  
+* `list_nodes_by_resource`: Get specific node types
+* `validate_node_exists`: Verify node class availability
 
 ### Executor Tools (Construction)
-- `create_node`, `create_edge`, `create_cluster`: Basic graph components
-- `create_empty_graph`, `build_graph`: Graph structure management
-- `add_node_to_graph`, `add_edge_to_graph`: Incremental building
-- `validate_graph`: Structure validation
-- `generate_diagram`: Final image generation
+
+* `create_node`, `create_edge`, `create_cluster`: Basic graph components
+* `create_empty_graph`, `build_graph`: Graph structure management
+* `add_node_to_graph`, `add_edge_to_graph`: Incremental building
+* `validate_graph`: Structure validation
+* `generate_diagram`: Final image generation
 
 ---
 
@@ -280,6 +282,7 @@ curl -X POST "http://localhost:8000/generate-diagram" \
 ### Example 1: Basic Web Application
 
 **Input:**
+
 ```json
 {
   "message": "Create a diagram showing a basic web application with an Application Load Balancer, two EC2 instances for the web servers, and an RDS database for storage. The web servers should be in a cluster named 'Web Tier'."
@@ -293,18 +296,20 @@ curl -X POST "http://localhost:8000/generate-diagram" \
 ### Example 2: Microservices Architecture
 
 **Input:**
+
 ```json
 {
   "message": "Design a microservices architecture with three services: an authentication service, a payment service, and an order service. Include an API Gateway for routing, an SQS queue for message passing between services, and a shared RDS database. Group the services in a cluster called 'Microservices'. Add CloudWatch for monitoring."
 }
 ```
+
 ![Microservices Architecture](examples/real_example_2.png)
 
 ---
 
 ## Project Structure
 
-```
+```text
 microservices/diagram_agent/
 ├── main.py              # FastAPI application entry point
 ├── agents/
