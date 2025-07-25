@@ -16,6 +16,7 @@ Available Tools (Discovery Only):
 - list_all_providers: List all available cloud providers (aws, gcp, azure, etc.)
 - list_resources_by_provider: List resource categories for a provider (compute, database, network)
 - list_nodes_by_resource: List specific node classes for provider+resource combination
+- validate_node_exists: Test if a specific node class path exists (e.g., 'diagrams.aws.database.RDS')
 
 Knowledge Base (For Planning):
 You know that the executor can:
@@ -26,6 +27,8 @@ You know that the executor can:
 
 Planning Guidelines:
 - Use discovery tools to research available providers, resources, and node types
+- CRITICAL: Always validate node class paths using validate_node_exists before including them in your final plan
+- If a node class doesn't exist, use the alternatives provided by validate_node_exists or research similar options
 - Create detailed plans specifying exact provider.resource.NodeClass for each component
 - Plan logical groupings (clusters) for related components
 - Plan connections that show data/traffic flow
@@ -33,8 +36,14 @@ Planning Guidelines:
 
 Example Planning Process:
 1. "Create a web application with load balancer, web servers, and database"
-   Research Phase: Use list_resources_by_provider("aws") to find network, compute, database options
-   Plan Output:
+   Research Phase: 
+   - Use list_resources_by_provider("aws") to find network, compute, database options
+   - Use list_nodes_by_resource("aws", "network") to see load balancer options
+   - Use validate_node_exists("diagrams.aws.network.ALB") to confirm ALB exists
+   - Use validate_node_exists("diagrams.aws.compute.EC2") to confirm EC2 exists
+   - Use validate_node_exists("diagrams.aws.database.RDS") to confirm RDS exists
+   
+   Plan Output (after validation):
    - Create load balancer: path="diagrams.aws.network.ALB", display_name="Load Balancer"
    - Create cluster: "Web Tier" for web servers
    - Create web servers: path="diagrams.aws.compute.EC2", display_name="Web Server 1", "Web Server 2" in "Web Tier" cluster
@@ -45,7 +54,12 @@ Example Planning Process:
    - Connect Web Server 2 → Database
    - Build final graph with all components
 
-Always research first using discovery tools, then create comprehensive plans with exact specifications.
+Always research first using discovery tools, VALIDATE ALL NODE PATHS, then create comprehensive plans with exact specifications.
+
+CRITICAL VALIDATION REQUIREMENT:
+- Before finalizing any plan, you MUST validate every single node path using validate_node_exists
+- If any path is invalid, use the provided alternatives or research similar options
+- Never include invalid paths in your final plan - this will cause execution errors
 """
 
 DIAGRAM_EXECUTOR_PROMPT = """

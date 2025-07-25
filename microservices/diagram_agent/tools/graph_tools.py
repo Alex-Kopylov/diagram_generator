@@ -475,11 +475,80 @@ def list_nodes_by_resource(provider: str, resource: str) -> List[str]:
         return []
 
 
+@tool(return_direct=True)
+def validate_node_exists(path: str) -> Dict[str, Any]:
+    """Validate if a specific node class exists in the diagrams package.
+    
+    Args:
+        path: Full path to the node class (e.g., 'diagrams.aws.database.Athena')
+        
+    Returns:
+        Dict[str, Any]: Validation result with exists flag, alternatives if not found
+    """
+    try:
+        # Parse the path
+        parts = path.split('.')
+        if len(parts) < 4 or parts[0] != 'diagrams':
+            return {
+                "exists": False, 
+                "error": f"Invalid path format. Expected 'diagrams.provider.resource.NodeClass', got '{path}'",
+                "alternatives": []
+            }
+        
+        provider = parts[1].lower()
+        resource = parts[2].lower()
+        node_class = parts[3]
+        
+        # Try to import the module and check if the class exists
+        module_name = f'diagrams.{provider}.{resource}'
+        try:
+            resource_module = importlib.import_module(module_name)
+            
+            # Check if the specific class exists
+            if hasattr(resource_module, node_class):
+                logger.info(f"Node class validated: {path}")
+                return {
+                    "exists": True,
+                    "path": path,
+                    "alternatives": []
+                }
+            else:
+                # Get available alternatives in the same resource
+                alternatives = []
+                for name, obj in inspect.getmembers(resource_module, inspect.isclass):
+                    if obj.__module__ == module_name and not name.startswith('_'):
+                        alternatives.append(f"diagrams.{provider}.{resource}.{name}")
+                
+                logger.warning(f"Node class '{node_class}' not found in {module_name}. Available: {alternatives}")
+                return {
+                    "exists": False,
+                    "error": f"Node class '{node_class}' not found in '{module_name}'",
+                    "alternatives": alternatives[:5]  # Limit to 5 alternatives
+                }
+                
+        except ImportError:
+            logger.warning(f"Module '{module_name}' not found")
+            return {
+                "exists": False,
+                "error": f"Module '{module_name}' not found",
+                "alternatives": []
+            }
+            
+    except Exception as e:
+        logger.exception(f"Failed to validate node {path}: {str(e)}")
+        return {
+            "exists": False,
+            "error": f"Validation failed: {str(e)}",
+            "alternatives": []
+        }
+
+
 # Tool sets for different nodes
 PLANNER_TOOLS = [
     list_all_providers,
     list_resources_by_provider,
-    list_nodes_by_resource
+    list_nodes_by_resource,
+    validate_node_exists
 ]
 
 EXECUTOR_TOOLS = [
