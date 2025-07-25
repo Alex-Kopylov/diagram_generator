@@ -12,9 +12,11 @@ class Settings(BaseSettings):
     """Application settings with environment variable support."""
     
     # OpenAI Configuration
-    openai_api_key: Optional[SecretStr] = Field(default="test", env="OPENAI_API_KEY")
+    model_api_key: Optional[SecretStr] = Field(default="test")
+    fallback_model_api_key: Optional[SecretStr] = Field(default="test")
     model_name: str = Field(default="gpt-4.1", env="MODEL_NAME")
-    temperature: float = Field(default=0.1, env="TEMPERATURE")
+    fallback_model_name: str = Field(default="claude-3-7-sonnet")
+    temperature: float = Field(default=0.0, env="TEMPERATURE")
     
     # LangGraph Configuration
     graph_renderer: str = Field(default="png", env="GRAPH_RENDERER")

@@ -73,7 +73,7 @@ async def generate_diagram(request: DiagramRequest):
         result = await diagram_agent.generate_diagram(
             message=request.message
         )
-        logger.info(f"Diagram generation request data: {result}")
+        logger.info(f"Diagram generation request data: {result.model_dump(exclude={'bytestring_base64'})}")
         if result.bytestring_base64:
             image_bytes = base64.b64decode(result.bytestring_base64)
             return Response(content=image_bytes, media_type="image/png")

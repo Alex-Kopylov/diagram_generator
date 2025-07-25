@@ -17,7 +17,7 @@ dependencies = [
     "tenacity>=8.2.0",
     "diagrams>=0.24.0",
     "langgraph-cli[inmem]>=0.3.6",
-    "langchain[langchain-openai]>=0.3.27",
+    "langchain[anthropic,langchain-openai]>=0.3.27",
 ]
 
 [project.optional-dependencies]

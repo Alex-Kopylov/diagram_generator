@@ -166,7 +166,9 @@ def create_planner_agent_node():
     def planner_agent(state: PlannerState, config: RunnableConfig) -> PlannerState:
         """Planner agent node that calls model with tools."""
         # Initialize model with tools
-        llm = init_chat_model(model=settings.model_name, temperature=settings.temperature, api_key=settings.openai_api_key)
+        llm = init_chat_model(model=settings.model_name, temperature=settings.temperature, api_key=settings.model_api_key).with_fallbacks([
+            init_chat_model(model=settings.fallback_model_name, temperature=settings.temperature, api_key=settings.fallback_model_api_key)
+        ])
         llm = llm.bind_tools(PLANNER_TOOLS)
         
         # Invoke model with current messages
@@ -181,7 +183,9 @@ def create_executor_agent_node():
     def executor_agent(state: ExecutorState, config: RunnableConfig) -> ExecutorState:
         """Executor agent node that calls model with tools."""
         # Initialize model with tools
-        llm = init_chat_model(model=settings.model_name, temperature=settings.temperature, api_key=settings.openai_api_key)
+        llm = init_chat_model(model=settings.model_name, temperature=settings.temperature, api_key=settings.model_api_key).with_fallbacks([
+                    init_chat_model(model=settings.fallback_model_name, temperature=settings.temperature, api_key=settings.fallback_model_api_key)
+                ])
         llm = llm.bind_tools(EXECUTOR_TOOLS)
         
         # Invoke model with current messages
