@@ -6,10 +6,12 @@ with separate planner and executor nodes orchestrated by a StateGraph.
 """
 
 import time
-from typing import Dict, Any, Optional
-from typing_extensions import TypedDict
+from typing import Dict, Any, Optional, Sequence
+from typing_extensions import TypedDict, Annotated
 from langgraph.graph import StateGraph, START, END
+from langgraph.graph.message import add_messages
 from langgraph.prebuilt import ToolNode
+from langchain_core.runnables import RunnableConfig
 
 from langchain_core.messages import HumanMessage, SystemMessage, AIMessage, ToolMessage, BaseMessage
 from pydantic import BaseModel, Field
@@ -22,6 +24,18 @@ from config.settings import get_settings
 from langchain.chat_models import init_chat_model
 
 settings = get_settings()
+
+
+class PlannerState(TypedDict):
+    """State for the planner React agent."""
+    messages: Annotated[Sequence[BaseMessage], add_messages]
+    plan: Optional[str]
+
+
+class ExecutorState(TypedDict):
+    """State for the executor React agent."""
+    messages: Annotated[Sequence[BaseMessage], add_messages]
+    graph: Optional[Graph]
 
 
 class DiagramState(BaseModel):
@@ -58,60 +72,169 @@ class DiagramGenerationResult(BaseModel):
     graph_data: Optional[Dict[str, Any]] = Field(None, description="Graph data used for diagram")
 
 
+# React Agent Helper Functions
+
+def create_planner_tools_node():
+    """Create tools node for planner with PLANNER_TOOLS."""
+    return ToolNode(PLANNER_TOOLS)
+
+
+def create_executor_tools_node():
+    """Create tools node for executor with EXECUTOR_TOOLS."""
+    # Create a custom executor tool node that can store graph state
+    def executor_tool_node(state: ExecutorState) -> ExecutorState:
+        """Execute executor tool calls and store graph if build_graph is called."""
+        # Use ToolNode to handle the actual tool execution
+        tool_node = ToolNode(EXECUTOR_TOOLS)  
+        tool_result = tool_node.invoke({"messages": state["messages"]})
+        
+        # Check if build_graph was called and extract the graph
+        last_message = state["messages"][-1]
+        for tool_call in last_message.tool_calls:
+            if tool_call["name"] == "build_graph":
+                # Find the corresponding tool result
+                for tool_msg in tool_result["messages"]:
+                    if hasattr(tool_msg, 'name') and tool_msg.name == 'build_graph':
+                        # The tool result content should be the Graph object
+                        # But it might be serialized, so we need to get it from the actual tool execution
+                        try:
+                            from tools.graph_tools import build_graph
+                            # Re-execute the build_graph tool to get the actual Graph object
+                            graph_result = build_graph.invoke(tool_call["args"])
+                            state["graph"] = graph_result
+                            logger.info("Graph stored in executor state")
+                            break
+                        except Exception as e:
+                            logger.error(f"Failed to extract graph: {e}")
+        
+        return tool_result
+    
+    return executor_tool_node
+
+
+def should_continue_planner(state: PlannerState):
+    """Decide whether to continue or end the planner."""
+    last_message = state["messages"][-1]
+    return "continue" if last_message.tool_calls else "end"
+
+
+def should_continue_executor(state: ExecutorState):
+    """Decide whether to continue or end the executor."""
+    last_message = state["messages"][-1]
+    
+    # If no tool calls, we're done
+    if not last_message.tool_calls:
+        return "end"
+    
+    # If build_graph was called, we should stop after executing it
+    for tool_call in last_message.tool_calls:
+        if tool_call["name"] == "build_graph":
+            # Check if this is the first time we're seeing build_graph
+            # If graph is already built, we should end
+            if state.get("graph") is not None:
+                return "end"
+    
+    return "continue"
+
+
+def create_planner_agent_node():
+    """Create the planner agent node using React pattern."""
+    def planner_agent(state: PlannerState, config: RunnableConfig) -> PlannerState:
+        """Planner agent node that calls model with tools."""
+        # Initialize model with tools
+        llm = init_chat_model(model=settings.model_name, temperature=settings.temperature, api_key=settings.openai_api_key)
+        llm = llm.bind_tools(PLANNER_TOOLS)
+        
+        # Invoke model with current messages
+        response = llm.invoke(state["messages"], config)
+        return {"messages": [response]}
+    
+    return planner_agent
+
+
+def create_executor_agent_node():
+    """Create the executor agent node using React pattern."""
+    def executor_agent(state: ExecutorState, config: RunnableConfig) -> ExecutorState:
+        """Executor agent node that calls model with tools."""
+        # Initialize model with tools
+        llm = init_chat_model(model=settings.model_name, temperature=settings.temperature, api_key=settings.openai_api_key)
+        llm = llm.bind_tools(EXECUTOR_TOOLS)
+        
+        # Invoke model with current messages
+        response = llm.invoke(state["messages"], config)
+        return {"messages": [response]}
+    
+    return executor_agent
+
+
 # Node Functions for LangGraph Workflow
 
 def planner_node(state: DiagramState) -> DiagramState:
     """
-    Planner node that creates a detailed execution plan and executes discovery tools.
+    Planner node that creates a detailed execution plan using React agent pattern.
     
     Args:
         state: Current diagram workflow state
         
     Returns:
-        Updated state with generated plan and tool results
+        Updated state with generated plan
     """
     logger.info("---PLANNER NODE---")
     try:
-        # Initialize planner agent with discovery tools only
-        llm = init_chat_model(model=settings.model_name, temperature=settings.temperature, api_key=settings.openai_api_key)
-        llm = llm.bind_tools(PLANNER_TOOLS)
-
-        # Log LLM call
+        # Create planner React agent
+        planner_workflow = StateGraph(PlannerState)
+        
+        # Add nodes
+        planner_agent_node = create_planner_agent_node()
+        planner_tools_node = create_planner_tools_node()
+        
+        planner_workflow.add_node("agent", planner_agent_node)
+        planner_workflow.add_node("tools", planner_tools_node)
+        
+        # Set entry point
+        planner_workflow.set_entry_point("agent")
+        
+        # Add conditional edges
+        planner_workflow.add_conditional_edges(
+            "agent",
+            should_continue_planner,
+            {
+                "continue": "tools",
+                "end": END
+            }
+        )
+        planner_workflow.add_edge("tools", "agent")
+        
+        # Compile the planner agent
+        planner_agent = planner_workflow.compile()
+        
+        # Prepare initial state
         prompt_content = f"Create a detailed plan for: {state.message}"
         logger.info(f"LLM Call - Model: {settings.model_name}, Temperature: {settings.temperature}, Agent: planner, Prompt: {prompt_content}")
         
-        # Create messages for conversation
-        messages = [
-            SystemMessage(content=DIAGRAM_PLANNER_PROMPT),
-            HumanMessage(content=prompt_content)
-        ]
+        initial_state = PlannerState(
+            messages=[
+                SystemMessage(content=DIAGRAM_PLANNER_PROMPT),
+                HumanMessage(content=prompt_content)
+            ],
+            plan=None
+        )
         
-        # Create plan using the planner agent
+        # Execute the planner agent
         start_time = time.time()
+        final_state = planner_agent.invoke(initial_state, {"recursion_limit": 30})
         
-        # Execute tool calls in a loop until no more tool calls are needed
-        tool_node = ToolNode(PLANNER_TOOLS)
+        # Extract plan from final messages
+        plan = "No plan generated"
+        if final_state["messages"]:
+            # Find the last AI message that's not a tool call
+            for msg in reversed(final_state["messages"]):
+                if isinstance(msg, AIMessage) and msg.content and not msg.tool_calls:
+                    plan = msg.content
+                    break
         
-        while True:
-            # Get LLM response
-            result: AIMessage = llm.invoke(messages)
-            messages.append(result)
-            
-            # Check if there are tool calls to execute
-            if result.tool_calls:
-                logger.info(f"Executing {len(result.tool_calls)} tool calls")
-                # Execute tools and get results
-                tool_messages = tool_node.invoke({"messages": messages})
-                # Add tool results to messages
-                messages.extend(tool_messages["messages"])
-            else:
-                # No more tool calls, we're done
-                break
+        logger.info(f"Planner completed with plan: {plan[:100]}...")
         
-        # Log LLM response
-        logger.info(f"Planner completed with {len(messages)} messages")
-        plan = result.content if result.content else "No plan generated"
-
         state.plan = plan
         state.success = True
         return state
@@ -127,7 +250,7 @@ def planner_node(state: DiagramState) -> DiagramState:
 
 def executor_node(state: DiagramState) -> DiagramState:
     """
-    Executor node that executes the generated plan and builds the graph.
+    Executor node that executes the generated plan using React agent pattern.
     
     Args:
         state: Current diagram workflow state with plan
@@ -143,72 +266,70 @@ def executor_node(state: DiagramState) -> DiagramState:
             state.error = "No plan available for execution"
             return state
         
-        # Initialize executor LLM with creation tools only
-        llm = init_chat_model(model=settings.model_name, temperature=settings.temperature, api_key=settings.openai_api_key)
-        llm = llm.bind_tools(EXECUTOR_TOOLS)
+        # Create executor React agent
+        executor_workflow = StateGraph(ExecutorState)
         
-        # Log LLM call
+        # Add nodes
+        executor_agent_node = create_executor_agent_node()
+        executor_tools_node = create_executor_tools_node()
+        
+        executor_workflow.add_node("agent", executor_agent_node)
+        executor_workflow.add_node("tools", executor_tools_node)
+        
+        # Set entry point
+        executor_workflow.set_entry_point("agent")
+        
+        # Add conditional edges
+        executor_workflow.add_conditional_edges(
+            "agent",
+            should_continue_executor,
+            {
+                "continue": "tools",
+                "end": END
+            }
+        )
+        executor_workflow.add_edge("tools", "agent")
+        
+        # Compile the executor agent with increased recursion limit
+        executor_agent = executor_workflow.compile()
+        
+        # Prepare initial state
         prompt_content = f"Execute this plan and MUST end with build_graph: {state.plan}"
         logger.info(f"LLM Call - Model: {settings.model_name}, Temperature: {settings.temperature}, Agent: executor, Prompt: {prompt_content}")
         
-        # Execute the plan using tool execution loop
+        initial_state = ExecutorState(
+            messages=[
+                SystemMessage(content=DIAGRAM_EXECUTOR_PROMPT),
+                HumanMessage(content=prompt_content)
+            ],
+            graph=None
+        )
+        
+        # Execute the executor agent
         start_time = time.time()
+        final_state = executor_agent.invoke(initial_state, {"recursion_limit": 50})
         
-        messages = [
-            SystemMessage(content=DIAGRAM_EXECUTOR_PROMPT),
-            HumanMessage(content=prompt_content)
-        ]
-        
-        # Create tool node for executor tools
-        tool_node = ToolNode(EXECUTOR_TOOLS)
-        built_graph = None
-        
-        # Execute tool calls in a loop until completion
-        while True:
-            # Get LLM response
-            result: AIMessage = llm.invoke(messages)
-            messages.append(result)
-            
-            # Check if there are tool calls to execute
-            if result.tool_calls:
-                logger.info(f"Executing {len(result.tool_calls)} tool calls")
-                # Execute tools and get results
-                tool_result = tool_node.invoke({"messages": messages})
-                # Add tool results to messages  
-                messages.extend(tool_result["messages"])
-                
-                # Check if build_graph was called by looking at tool calls and responses
-                for i, tool_call in enumerate(result.tool_calls):
-                    if tool_call['name'] == 'build_graph':
-                        # Find corresponding tool message in responses
-                        if i < len(tool_result["messages"]):
-                            tool_msg = tool_result["messages"][i]
-                            if hasattr(tool_msg, 'content'):
-                                # The build_graph tool returns a Graph object as content
-                                try:
-                                    # The content should be the Graph object directly
-                                    built_graph = tool_msg.content
-                                    logger.info("Graph successfully built by executor")
-                                    break
-                                except Exception as graph_error:
-                                    logger.error(f"Failed to extract graph: {graph_error}")
-                
-                # If we found a built graph, we can stop
-                if built_graph:
+        # Extract result and graph from final state
+        result_message = "Execution completed"
+        if final_state["messages"]:
+            # Find the last AI message
+            for msg in reversed(final_state["messages"]):
+                if isinstance(msg, AIMessage) and msg.content:
+                    result_message = msg.content
                     break
-            else:
-                # No more tool calls, we're done
-                break
         
-        # Set the graph in state
+        # Get the built graph from state
+        built_graph = final_state.get("graph")
+        
         if built_graph:
             state.graph = built_graph
+            logger.info("Graph successfully built by executor")
         else:
             logger.warning("No graph was built during execution, creating empty graph")
             from core.graph_structure import Graph, Direction
             state.graph = Graph(name="Generated Diagram", direction=Direction.LEFT_RIGHT)
         
-        state.result = result.content if result.content else "Execution completed"
+        state.result = result_message
         state.success = True
         
         duration_ms = (time.time() - start_time) * 1000
@@ -217,7 +338,7 @@ def executor_node(state: DiagramState) -> DiagramState:
         return state
         
     except Exception as e:
-        logger.exception(f"LLM Error - Model: {settings.model_name}, Agent: executor, Error: {str(e)}, Prompt: Execute this plan: {state.get('plan', 'No plan')}")
+        logger.exception(f"LLM Error - Model: {settings.model_name}, Agent: executor, Error: {str(e)}, Prompt: Execute this plan: {state.plan if state.plan else 'No plan'}")
         logger.error(f"Execution failed: {str(e)}")
         state.result = None
         state.success = False
