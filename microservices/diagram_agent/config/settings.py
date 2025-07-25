@@ -13,7 +13,7 @@ class Settings(BaseSettings):
     
     # OpenAI Configuration
     openai_api_key: Optional[SecretStr] = Field(default="test", env="OPENAI_API_KEY")
-    model_name: str = Field(default="gpt-4.1-nano-2025-04-14", env="MODEL_NAME")
+    model_name: str = Field(default="gpt-4.1", env="MODEL_NAME")
     temperature: float = Field(default=0.1, env="TEMPERATURE")
     
     # LangGraph Configuration

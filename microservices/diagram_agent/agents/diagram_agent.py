@@ -6,6 +6,7 @@ with separate planner and executor nodes orchestrated by a StateGraph.
 """
 
 import time
+import base64
 from typing import Dict, Any, Optional, Sequence
 from typing_extensions import TypedDict, Annotated
 from langgraph.graph import StateGraph, START, END
@@ -67,6 +68,7 @@ class DiagramGenerationResult(BaseModel):
     success: bool = Field(..., description="Whether diagram generation succeeded")
     message: str = Field(..., description="Success or error message")
     file_path: Optional[str] = Field(None, description="Path to generated diagram file")
+    bytestring_base64: Optional[str] = Field(None, description="Generated diagram as base64 encoded string")
     graph_data: Optional[Graph] = Field(None, description="Graph data used for diagram")
 
 
@@ -244,7 +246,7 @@ def planner_node(state: DiagramState) -> DiagramState:
         
         # Execute the planner agent
         start_time = time.time()
-        final_state = planner_agent.invoke(initial_state, {"recursion_limit": 30})
+        final_state = planner_agent.invoke(initial_state, {"recursion_limit": 70})
         
         # Extract plan from final messages
         plan = "No plan generated"
@@ -312,7 +314,6 @@ def executor_node(state: DiagramState) -> DiagramState:
         )
         executor_workflow.add_edge("tools", "agent")
         
-        # Compile the executor agent with increased recursion limit
         executor_agent = executor_workflow.compile()
         
         # Prepare initial state
@@ -496,10 +497,18 @@ class DiagramAgent:
             logger.info(f"Diagram generation workflow completed in {workflow_duration_ms:.2f}ms")
             
             # Extract results from final state (post-processing handled by graph_builder_node)
+            bytestring_base64_data = None
+            if final_state["diagram_result"] and final_state["diagram_result"].get("bytestring"):
+                # Convert bytes to base64 string for JSON serialization
+                bytestring_data = final_state["diagram_result"]["bytestring"]
+                if bytestring_data:
+                    bytestring_base64_data = base64.b64encode(bytestring_data).decode('utf-8')
+            
             return DiagramGenerationResult(
                 success=final_state["success"],
                 message=final_state["result"] or final_state["error"] or "Workflow completed",
                 file_path=final_state["file_path"],
+                bytestring_base64=bytestring_base64_data,
                 graph_data=final_state["graph"]
             )
             
@@ -511,6 +520,7 @@ class DiagramAgent:
                 success=False,
                 message=f"Diagram generation workflow failed: {str(e)}",
                 file_path=None,
+                bytestring_base64=None,
                 graph_data=None
             )
     

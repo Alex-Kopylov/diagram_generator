@@ -4,9 +4,10 @@ FastAPI endpoints for the LangGraph Diagram Agent.
 Provides HTTP endpoints for diagram generation and health checks using native tools.
 """
 
+import base64
 import os
 from typing import Dict, Any, Optional
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import FastAPI, HTTPException, Request, Response
 from pydantic import BaseModel, Field
 from loguru import logger
 
@@ -72,8 +73,12 @@ async def generate_diagram(request: DiagramRequest):
         result = await diagram_agent.generate_diagram(
             message=request.message
         )
-        logger.info(f"Diagram generation request successful: {result.success}")
-        return result
+        logger.info(f"Diagram generation request data: {result}")
+        if result.bytestring_base64:
+            image_bytes = base64.b64decode(result.bytestring_base64)
+            return Response(content=image_bytes, media_type="image/png")
+        else:
+            raise HTTPException(status_code=500, detail="No bytestring available")
     
     except Exception as e:
         logger.exception(f"Diagram generation request failed: {str(e)}")

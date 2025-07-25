@@ -325,7 +325,7 @@ class Graph(BaseModel):
         from diagrams import Diagram, Cluster as DiagramsCluster
         
         # Create diagram with direction
-        with Diagram(self.name, direction=self.direction.value, show=False) as diagram:
+        with Diagram(self.name, direction=self.direction.value if isinstance(self.direction, Direction) else self.direction, show=False) as diagram:
             # Dictionary to store created nodes for edge connections
             diagram_nodes = {}
             cluster_nodes = {}

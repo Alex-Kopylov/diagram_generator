@@ -28,7 +28,7 @@ class DiagramResult(BaseModel):
     """Diagram generation result schema."""
     success: bool = Field(..., description="Whether diagram generation succeeded")
     file_path: str | None = Field(None, description="Generated diagram file path")
-    bytestring: bytes | None = Field(None, description="Generated diagram bytestring")
+    bytestring: bytes | None = Field(None, description="Generated diagram bytestring (internal use)")
     error: str | None = Field(None, description="Error message if generation failed")
 
 
