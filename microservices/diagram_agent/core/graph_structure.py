@@ -1,7 +1,7 @@
 from typing import Dict, Set, Optional
 from enum import Enum
 import uuid
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_serializer
 
 
 class Direction(str, Enum):
@@ -132,6 +132,11 @@ class Cluster(BaseModel):
     
     def __repr__(self):
         return f"Cluster(name='{self.name}', nodes={len(self.nodes)})"
+    
+    @field_serializer('nodes')
+    def serialize_nodes(self, nodes_set: Set[Node]):
+        """Serialize the nodes set to a list for JSON compatibility."""
+        return [node.model_dump() for node in nodes_set]
 
 
 class Graph(BaseModel):
@@ -291,6 +296,21 @@ class Graph(BaseModel):
     def __repr__(self):
         return (f"Graph(name='{self.name}', direction='{self.direction}', nodes={self.node_count()}, "
                 f"edges={self.edge_count()}, clusters={self.cluster_count()})")
+    
+    @field_serializer('nodes')
+    def serialize_nodes(self, nodes_set: Set[Node]):
+        """Serialize the nodes set to a list for JSON compatibility."""
+        return [node.model_dump() for node in nodes_set]
+    
+    @field_serializer('edges')
+    def serialize_edges(self, edges_set: Set[Edge]):
+        """Serialize the edges set to a list for JSON compatibility."""
+        return [edge.model_dump() for edge in edges_set]
+    
+    @field_serializer('clusters')
+    def serialize_clusters(self, clusters_dict: Dict[str, Cluster]):
+        """Serialize the clusters dict with proper serialization."""
+        return {k: v.model_dump() for k, v in clusters_dict.items()}
     
     def to_diagrams(self):
         """Convert graph to diagrams library format for rendering.
