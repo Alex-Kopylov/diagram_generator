@@ -67,7 +67,7 @@ class DiagramGenerationResult(BaseModel):
     success: bool = Field(..., description="Whether diagram generation succeeded")
     message: str = Field(..., description="Success or error message")
     file_path: Optional[str] = Field(None, description="Path to generated diagram file")
-    graph_data: Optional[Dict[str, Any]] = Field(None, description="Graph data used for diagram")
+    graph_data: Optional[Graph] = Field(None, description="Graph data used for diagram")
 
 
 # React Agent Helper Functions
@@ -370,12 +370,14 @@ def executor_node(state: DiagramState) -> DiagramState:
 def graph_builder_node(state: DiagramState) -> DiagramState:
     """
     Graph builder node that generates the final diagram from the built graph.
+    Handles all post-processing logic including diagram generation, file output,
+    and final result formatting.
     
     Args:
         state: Current diagram workflow state with graph from executor
         
     Returns:
-        Updated state with diagram generation result
+        Updated DiagramState with complete diagram generation results
     """
     logger.info("---GRAPH_BUILDER NODE---")
     try:
@@ -391,7 +393,7 @@ def graph_builder_node(state: DiagramState) -> DiagramState:
             "output_file": state.file_path
         })
         
-        # Update state with diagram result
+        # Update state with complete diagram generation results
         state.diagram_result = diagram_result.model_dump()
         state.file_path = diagram_result.file_path
         state.success = diagram_result.success
@@ -400,6 +402,9 @@ def graph_builder_node(state: DiagramState) -> DiagramState:
             state.error = diagram_result.error
             logger.error(f"Diagram generation failed: {diagram_result.error}")
         else:
+            # Set success message if not already set
+            if not state.result:
+                state.result = f"Diagram generated successfully: {diagram_result.file_path}"
             logger.info(f"Diagram generated successfully: {diagram_result.file_path}")
         
         return state
@@ -459,6 +464,7 @@ class DiagramAgent:
     async def generate_diagram(self, message: str, output_file: Optional[str] = None) -> DiagramGenerationResult:
         """
         Generate a diagram from a natural language description using the workflow.
+        Acts as orchestrator - passes args to workflow and returns output from nodes.
         
         Args:
             message: User message describing the diagram to create
@@ -489,19 +495,13 @@ class DiagramAgent:
             workflow_duration_ms = (time.time() - workflow_start_time) * 1000
             logger.info(f"Diagram generation workflow completed in {workflow_duration_ms:.2f}ms")
             
-            result = DiagramGenerationResult(
-                success=final_state.get("success", False),
-                message=final_state.get("result") or final_state.get("error", "Workflow completed"),
-                file_path=final_state.get("file_path"),
-                graph_data=final_state.get("graph")
+            # Extract results from final state (post-processing handled by graph_builder_node)
+            return DiagramGenerationResult(
+                success=final_state["success"],
+                message=final_state["result"] or final_state["error"] or "Workflow completed",
+                file_path=final_state["file_path"],
+                graph_data=final_state["graph"]
             )
-            
-            if result.success:
-                logger.info(f"Diagram generation successful: {result.file_path}")
-            else:
-                logger.error(f"Diagram generation failed: {result.message}")
-            
-            return result
             
         except Exception as e:
             workflow_duration_ms = (time.time() - workflow_start_time) * 1000

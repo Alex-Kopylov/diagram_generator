@@ -72,16 +72,8 @@ async def generate_diagram(request: DiagramRequest):
         result = await diagram_agent.generate_diagram(
             message=request.message
         )
-        
-        response = DiagramGenerationResult(
-            success=result.success,
-            message=result.message,
-            file_path=result.file_path,
-            graph_data=result.graph_data
-        )
-        
-        logger.info(f"Diagram generation request completed successfully: {result.success}")
-        return response
+        logger.info(f"Diagram generation request successful: {result.success}")
+        return result
     
     except Exception as e:
         logger.exception(f"Diagram generation request failed: {str(e)}")
@@ -99,20 +91,7 @@ async def chat_endpoint(request: ChatRequest):
     """
     logger.info(f"Chat request received for session {request.session_id}: {request.message}")
     try:
-        # Use the native diagram agent for chat
-        response = await diagram_agent.chat(
-            message=request.message,
-            session_id=request.session_id
-        )
-        
-        chat_response = ChatResponse(
-            message=response,
-            session_id=request.session_id
-        )
-        
-        logger.info(f"Chat request completed successfully for session {request.session_id}")
-        return chat_response
-    
+        raise NotImplementedError("Chat endpoint is not implemented")
     except Exception as e:
         logger.exception(f"Chat request failed for session {request.session_id}: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Chat failed: {str(e)}")

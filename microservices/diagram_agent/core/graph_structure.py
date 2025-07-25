@@ -165,7 +165,11 @@ class Graph(BaseModel):
         description="Internal adjacency list for efficient edge lookups"
     )
     
-    model_config = {"populate_by_name": True}  # Allow field population by alias
+    model_config = {
+        "populate_by_name": True,  # Allow field population by alias
+        "arbitrary_types_allowed": True,  # Allow complex types
+        "use_enum_values": True  # Use enum values in serialization
+    }
     
     def add_node(self, node: Node):
         """Add a node to the graph.
