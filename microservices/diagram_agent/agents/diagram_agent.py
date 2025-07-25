@@ -51,7 +51,6 @@ class DiagramState(BaseModel):
         success: Whether the workflow completed successfully
         error: Error message if workflow failed
         file_path: Path to generated diagram file
-        graph_data: Graph data used for diagram generation
     """
     message: str = Field(..., description="Original user message describing the diagram")
     plan: Optional[str] = Field(None, description="Generated execution plan from the planner")
@@ -61,7 +60,6 @@ class DiagramState(BaseModel):
     success: bool = Field(..., description="Whether the workflow completed successfully")
     error: Optional[str] = Field(None, description="Error message if workflow failed")
     file_path: Optional[str] = Field(None, description="Path to generated diagram file")
-    graph_data: Optional[Dict[str, Any]] = Field(None, description="Graph data used for diagram")
 
 
 class DiagramGenerationResult(BaseModel):
@@ -88,11 +86,17 @@ def create_executor_tools_node():
         tool_node = ToolNode(EXECUTOR_TOOLS)  
         tool_result = tool_node.invoke({"messages": state["messages"]})
         
+        # Start with the tool result and preserve the existing state
+        updated_state = {
+            "messages": tool_result["messages"],
+            "graph": state.get("graph")  # Preserve existing graph
+        }
+        
         # Check if any graph-building tool was called and extract the graph
         last_message = state["messages"][-1]
         if hasattr(last_message, 'tool_calls') and last_message.tool_calls:
             for tool_call in last_message.tool_calls:
-                graph_building_tools = ["build_graph", "add_to_graph", "add_node_to_graph", "add_edge_to_graph", "create_empty_graph"]
+                graph_building_tools = {"build_graph", "add_to_graph", "add_node_to_graph", "add_edge_to_graph", "create_empty_graph"}
                 if tool_call["name"] in graph_building_tools:
                     # Find the corresponding tool result message
                     for tool_msg in tool_result["messages"]:
@@ -101,30 +105,31 @@ def create_executor_tools_node():
                             # Extract the actual Graph object from the tool result
                             try:
                                 # Re-execute the tool to get the actual Graph object
-                                if tool_call["name"] == "build_graph":
-                                    from tools.graph_tools import build_graph
-                                    graph_result = build_graph.invoke(tool_call["args"])
-                                elif tool_call["name"] == "add_to_graph":
-                                    from tools.graph_tools import add_to_graph
-                                    graph_result = add_to_graph.invoke(tool_call["args"])
-                                elif tool_call["name"] == "add_node_to_graph":
-                                    from tools.graph_tools import add_node_to_graph
-                                    graph_result = add_node_to_graph.invoke(tool_call["args"])
-                                elif tool_call["name"] == "add_edge_to_graph":
-                                    from tools.graph_tools import add_edge_to_graph
-                                    graph_result = add_edge_to_graph.invoke(tool_call["args"])
-                                elif tool_call["name"] == "create_empty_graph":
-                                    from tools.graph_tools import create_empty_graph
-                                    graph_result = create_empty_graph.invoke(tool_call["args"])
+                                match tool_call["name"]:
+                                    case "build_graph":
+                                        from tools.graph_tools import build_graph
+                                        graph_result = build_graph.invoke(tool_call["args"])
+                                    case "add_to_graph":
+                                        from tools.graph_tools import add_to_graph
+                                        graph_result = add_to_graph.invoke(tool_call["args"])
+                                    case "add_node_to_graph":
+                                        from tools.graph_tools import add_node_to_graph
+                                        graph_result = add_node_to_graph.invoke(tool_call["args"])
+                                    case "add_edge_to_graph":
+                                        from tools.graph_tools import add_edge_to_graph
+                                        graph_result = add_edge_to_graph.invoke(tool_call["args"])
+                                    case "create_empty_graph":
+                                        from tools.graph_tools import create_empty_graph
+                                        graph_result = create_empty_graph.invoke(tool_call["args"])
                                 
-                                state["graph"] = graph_result
+                                updated_state["graph"] = graph_result
                                 logger.info(f"Graph stored in executor state from {tool_call['name']}: {graph_result.name} with {len(graph_result.nodes)} nodes")
                                 break
                             except Exception as e:
                                 logger.error(f"Failed to extract graph from {tool_call['name']} call: {e}")
                                 logger.debug(f"Tool call args: {tool_call['args']}")
         
-        return tool_result
+        return updated_state
     
     return executor_tool_node
 
@@ -335,18 +340,15 @@ def executor_node(state: DiagramState) -> DiagramState:
                     result_message = msg.content
                     break
         
-        # Get the built graph from state
-        for msg in final_state["messages"]:
-            if isinstance(msg, ToolMessage) and msg.name == "build_graph":
-                built_graph = msg.args["graph"]
-                break
+        # Get the built graph from final state
+        built_graph = final_state.get("graph")
         
         if built_graph:
             state.graph = built_graph
-            logger.info("Graph successfully built by executor")
+            logger.info(f"Graph successfully built by executor: {built_graph.name} with {len(built_graph.nodes)} nodes")
         else:
-            logger.warning("No graph was built during execution, creating empty graph")
-            from core.graph_structure import Graph, Direction
+            logger.warning("No graph was built during execution")
+            # Don't create an empty graph here - let graph_builder_node handle the error
         
         state.result = result_message
         state.success = True
@@ -479,7 +481,6 @@ class DiagramAgent:
                 success=False,
                 error=None,
                 file_path=output_file,
-                graph_data=None
             )
             
             # Execute the workflow
@@ -492,7 +493,7 @@ class DiagramAgent:
                 success=final_state.get("success", False),
                 message=final_state.get("result") or final_state.get("error", "Workflow completed"),
                 file_path=final_state.get("file_path"),
-                graph_data=final_state.get("graph_data")
+                graph_data=final_state.get("graph")
             )
             
             if result.success:

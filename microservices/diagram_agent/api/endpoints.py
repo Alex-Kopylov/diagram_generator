@@ -10,7 +10,7 @@ from fastapi import FastAPI, HTTPException, Request
 from pydantic import BaseModel, Field
 from loguru import logger
 
-from agents.diagram_agent import create_diagram_agent
+from agents.diagram_agent import DiagramGenerationResult, create_diagram_agent
 
 # Initialize FastAPI app
 app = FastAPI(
@@ -29,12 +29,6 @@ class DiagramRequest(BaseModel):
     message: str = Field(..., description="User message describing the diagram to create")
 
 
-class DiagramResponse(BaseModel):
-    """Response schema for diagram generation."""
-    success: bool = Field(..., description="Whether the diagram was generated successfully")
-    message: str = Field(..., description="Success or error message")
-    file_path: Optional[str] = Field(None, description="Path to generated diagram file")
-    graph_data: Optional[Dict[str, Any]] = Field(None, description="Graph data used for diagram")
 
 
 class ChatRequest(BaseModel):
@@ -65,7 +59,7 @@ async def health_check():
 
 
 # Diagram generation endpoint (stateless)
-@app.post("/generate-diagram", response_model=DiagramResponse)
+@app.post("/generate-diagram", response_model=DiagramGenerationResult)
 async def generate_diagram(request: DiagramRequest):
     """
     Generate a diagram from a user message.
@@ -79,7 +73,7 @@ async def generate_diagram(request: DiagramRequest):
             message=request.message
         )
         
-        response = DiagramResponse(
+        response = DiagramGenerationResult(
             success=result.success,
             message=result.message,
             file_path=result.file_path,

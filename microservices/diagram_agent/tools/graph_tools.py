@@ -112,7 +112,7 @@ def create_empty_graph(name: str, direction: Direction = Direction.LEFT_RIGHT) -
 
 
 @tool(return_direct=True)
-def build_graph(name: str, direction: Direction, nodes: List[Node], edges: List[Union[Edge, Dict[str, Any]]], clusters: Optional[List[Union[Cluster, Dict[str, Any]]]] = None) -> str:
+def build_graph(name: str, direction: Direction, nodes: List[Node], edges: List[Union[Edge, Dict[str, Any]]], clusters: Optional[List[Union[Cluster, Dict[str, Any]]]] = None) -> Graph:
     """Build a complete graph from components.
     
     Args:
@@ -177,7 +177,7 @@ def build_graph(name: str, direction: Direction, nodes: List[Node], edges: List[
             graph.add_cluster(cluster)
     
     logger.info(f"Graph built successfully: {graph.name} with {len(graph.nodes)} nodes, {len(graph.edges)} edges")
-    return graph.model_dump_json()
+    return graph
 
 
 @tool(return_direct=True) 
@@ -299,18 +299,17 @@ def add_to_graph(graph: Graph, nodes: Optional[List[Node]] = None, edges: Option
 
 
 @tool(return_direct=True)
-def validate_graph(graph_data: Dict[str, Any]) -> ValidationResult:
+def validate_graph(graph: Graph) -> ValidationResult:
     """Validate graph structure and connections.
     
     Args:
-        graph_data: Graph data as dictionary
+        graph: Graph to validate
         
     Returns:
         ValidationResult: Validation result with errors if any
     """
     logger.debug("Validating graph structure")
     
-    graph = Graph.model_validate(graph_data)
     errors = []
     
     # Check for orphaned edges
