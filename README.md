@@ -16,6 +16,107 @@ The service implements a **multi-agent workflow** using LangGraph:
 * **Executor Agent**: Executes plans by building graph structures using construction tools  
 * **Graph Builder**: Generates final diagram images from completed graph structures
 
+```mermaid
+graph TD
+    %% User Input
+    A[User Request: Natural Language Description] --> B[DiagramAgent.generate_diagram]
+    
+    %% Main Workflow State
+    B --> C[Initialize DiagramState]
+    C --> D[Planner Node]
+    
+    %% Planner Agent Subgraph
+    subgraph PlannerWorkflow ["Planner React Agent"]
+        D --> D1[Planner Agent LLM]
+        D1 --> D2{Tool Calls?}
+        D2 -->|Yes| D3[Planner Tools Node]
+        D2 -->|No| D4[Plan Generated]
+        D3 --> D1
+        
+        %% Planner Tools
+        subgraph PlannerTools ["Planner Tools"]
+            PT1[list_all_providers]
+            PT2[list_resources_by_provider]
+            PT3[list_nodes_by_resource]
+            PT4[validate_node_exists]
+        end
+        D3 --> PlannerTools
+    end
+    
+    D4 --> E[Executor Node]
+    
+    %% Executor Agent Subgraph
+    subgraph ExecutorWorkflow ["Executor React Agent"]
+        E --> E1[Executor Agent LLM]
+        E1 --> E2{Tool Calls?}
+        E2 -->|Yes| E3[Executor Tools Node]
+        E2 -->|No| E4[Graph Built]
+        E3 --> E1
+        
+        %% Executor Tools
+        subgraph ExecutorTools ["Executor Tools"]
+            ET1[create_node]
+            ET2[create_edge]
+            ET3[create_cluster]
+            ET4[create_empty_graph]
+            ET5[add_node_to_graph]
+            ET6[add_edge_to_graph]
+            ET7[build_graph]
+            ET8[validate_graph]
+        end
+        E3 --> ExecutorTools
+    end
+    
+    E4 --> F[Graph Builder Node]
+    F --> G[generate_diagram]
+    G --> H[DiagramGenerationResult]
+    
+    %% Data Models
+    subgraph DataModels ["Core Data Models"]
+        DM1[Node: path, display_name, id]
+        DM2[Edge: source, target, forward, reverse]
+        DM3[Cluster: name, nodes]
+        DM4[Graph: name, direction, nodes, edges, clusters]
+    end
+    
+    %% State Management
+    subgraph StateManagement ["State Management"]
+        S1[DiagramState: message, plan, result, graph, success]
+        S2[PlannerState: messages, plan]
+        S3[ExecutorState: messages, graph]
+    end
+    
+    %% External Dependencies
+    subgraph External ["External Dependencies"]
+        EX1[OpenAI GPT Models]
+        EX2[Anthropic Claude Models]
+        EX3[Diagrams Library]
+        EX4[FastAPI Endpoints]
+    end
+    
+    %% Connections to external systems
+    D1 -.-> EX1
+    D1 -.-> EX2
+    E1 -.-> EX1
+    E1 -.-> EX2
+    G -.-> EX3
+    H --> EX4
+    
+    %% Tool connections to data models
+    ExecutorTools -.-> DataModels
+    
+    %% Styling
+    classDef agent fill:#e1f5fe,stroke:#01579b,stroke-width:2px
+    classDef tools fill:#f3e5f5,stroke:#4a148c,stroke-width:2px
+    classDef state fill:#e8f5e8,stroke:#1b5e20,stroke-width:2px
+    classDef external fill:#fff3e0,stroke:#e65100,stroke-width:2px
+    
+    class D,E,F agent
+    class PlannerTools,ExecutorTools tools
+    class StateManagement,DataModels state
+    class External external
+```
+
 ### Key Features
 
 * **Native Tool Integration**: Custom tools that operate the diagrams package without exposing implementation details to the LLM
