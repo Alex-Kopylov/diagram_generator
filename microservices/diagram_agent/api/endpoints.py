@@ -5,11 +5,10 @@ Provides HTTP endpoints for diagram generation and health checks using native to
 """
 
 import base64
-import os
-from typing import Dict, Any, Optional
-from fastapi import FastAPI, HTTPException, Request, Response
-from pydantic import BaseModel, Field
+
+from fastapi import FastAPI, HTTPException, Response
 from loguru import logger
+from pydantic import BaseModel, Field
 
 from agents.diagram_agent import DiagramGenerationResult, create_diagram_agent
 
@@ -35,13 +34,13 @@ class DiagramRequest(BaseModel):
 class ChatRequest(BaseModel):
     """Request schema for chat endpoint."""
     message: str = Field(..., description="User message")
-    session_id: Optional[str] = Field(None, description="Optional session ID for conversation")
+    session_id: str | None = Field(None, description="Optional session ID for conversation")
 
 
 class ChatResponse(BaseModel):
     """Response schema for chat endpoint."""
     message: str = Field(..., description="Agent response")
-    session_id: Optional[str] = Field(None, description="Session ID")
+    session_id: str | None = Field(None, description="Session ID")
 
 
 class HealthResponse(BaseModel):
@@ -79,7 +78,7 @@ async def generate_diagram(request: DiagramRequest):
             return Response(content=image_bytes, media_type="image/png")
         else:
             raise HTTPException(status_code=500, detail="No bytestring available")
-    
+
     except Exception as e:
         logger.exception(f"Diagram generation request failed: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Diagram generation failed: {str(e)}")

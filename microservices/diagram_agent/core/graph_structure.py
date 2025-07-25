@@ -1,6 +1,6 @@
-from typing import Dict, Set, Optional
-from enum import Enum
 import uuid
+from enum import Enum
+
 from pydantic import BaseModel, Field, field_serializer
 
 
@@ -22,11 +22,11 @@ class Node(BaseModel):
     Each node has a path to its corresponding diagrams library class and
     an optional display name for human-readable representation.
     """
-    
+
     path: str = Field(
         description="Full import path to the diagrams class (e.g., 'diagrams.aws.compute.EC2')"
     )
-    display_name: Optional[str] = Field(
+    display_name: str | None = Field(
         default=None,
         description="Optional human-readable name for the node (e.g., 'Web Server')"
     )
@@ -34,16 +34,16 @@ class Node(BaseModel):
         default_factory=lambda: uuid.uuid4().hex,
         description="Unique identifier for the node"
     )
-    
+
     def __str__(self):
         return f"Node({self.display_name or self.path})"
-    
+
     def __repr__(self):
         return f"Node(path='{self.path}', display_name='{self.display_name}', id='{self.id}')"
-    
+
     def __eq__(self, other):
         return isinstance(other, Node) and self.id == other.id
-    
+
     def __hash__(self):
         return hash(self.id)
 
@@ -54,7 +54,7 @@ class Edge(BaseModel):
     Defines a directed or undirected connection between two nodes with
     configurable direction indicators for visualization.
     """
-    
+
     source: Node = Field(description="Source node of the connection")
     target: Node = Field(description="Target node of the connection")
     forward: bool = Field(
@@ -69,16 +69,16 @@ class Edge(BaseModel):
         default_factory=lambda: uuid.uuid4().hex,
         description="Unique identifier for the edge"
     )
-    
+
     def __str__(self):
         return f"Edge({self.source.id} -> {self.target.id})"
-    
+
     def __repr__(self):
         return f"Edge(source={self.source.id}, target={self.target.id})"
-    
+
     def __eq__(self, other):
         return isinstance(other, Edge) and self.id == other.id
-    
+
     def __hash__(self):
         return hash(self.id)
 
@@ -89,9 +89,9 @@ class Cluster(BaseModel):
     Groups related nodes together for better organization and visualization.
     Clusters are rendered as containers/boxes around their contained nodes.
     """
-    
+
     name: str = Field(description="Name/label of the cluster")
-    nodes: Set[Node] = Field(
+    nodes: set[Node] = Field(
         default_factory=set,
         description="Set of nodes contained within this cluster"
     )
@@ -99,7 +99,7 @@ class Cluster(BaseModel):
         default_factory=lambda: uuid.uuid4().hex,
         description="Unique identifier for the cluster"
     )
-    
+
     def add_node(self, node: Node):
         """Add a node to this cluster.
         
@@ -107,7 +107,7 @@ class Cluster(BaseModel):
             node: Node to add to the cluster
         """
         self.nodes.add(node)
-    
+
     def remove_node(self, node: Node):
         """Remove a node from this cluster.
         
@@ -115,7 +115,7 @@ class Cluster(BaseModel):
             node: Node to remove from the cluster
         """
         self.nodes.discard(node)
-    
+
     def has_node(self, node: Node) -> bool:
         """Check if this cluster contains a specific node.
         
@@ -126,15 +126,15 @@ class Cluster(BaseModel):
             bool: True if node is in this cluster
         """
         return node in self.nodes
-    
+
     def __str__(self):
         return f"Cluster({self.name})"
-    
+
     def __repr__(self):
         return f"Cluster(name='{self.name}', nodes={len(self.nodes)})"
-    
+
     @field_serializer('nodes')
-    def serialize_nodes(self, nodes_set: Set[Node]):
+    def serialize_nodes(self, nodes_set: set[Node]):
         """Serialize the nodes set to a list for JSON compatibility."""
         return [node.model_dump() for node in nodes_set]
 
@@ -146,36 +146,36 @@ class Graph(BaseModel):
     their connections (edges), logical groupings (clusters), and metadata
     for rendering the final diagram.
     """
-    
+
     name: str = Field(description="Name/title of the diagram")
     direction: Direction = Field(
         default=Direction.TOP_BOTTOM,
         description="Layout direction for the diagram"
     )
-    nodes: Set[Node] = Field(
+    nodes: set[Node] = Field(
         default_factory=set,
         description="All nodes in the graph"
     )
-    edges: Set[Edge] = Field(
+    edges: set[Edge] = Field(
         default_factory=set,
         description="All connections between nodes"
     )
-    clusters: Dict[str, Cluster] = Field(
+    clusters: dict[str, Cluster] = Field(
         default_factory=dict,
         description="Named clusters for grouping nodes"
     )
-    adjacency: Dict[Node, Set[Edge]] = Field(
+    adjacency: dict[Node, set[Edge]] = Field(
         default_factory=dict,
         exclude=True,
         description="Internal adjacency list for efficient edge lookups"
     )
-    
+
     model_config = {
         "populate_by_name": True,  # Allow field population by alias
         "arbitrary_types_allowed": True,  # Allow complex types
         "use_enum_values": True  # Use enum values in serialization
     }
-    
+
     def add_node(self, node: Node):
         """Add a node to the graph.
         
@@ -185,7 +185,7 @@ class Graph(BaseModel):
         self.nodes.add(node)
         if node not in self.adjacency:
             self.adjacency[node] = set()
-    
+
     def remove_node(self, node: Node):
         """Remove a node from the graph.
         
@@ -196,18 +196,18 @@ class Graph(BaseModel):
         """
         if node in self.nodes:
             # Remove all edges connected to this node
-            edges_to_remove = [edge for edge in self.edges 
+            edges_to_remove = [edge for edge in self.edges
                              if edge.source == node or edge.target == node]
             for edge in edges_to_remove:
                 self.remove_edge(edge)
-            
+
             # Remove node from all clusters
             for cluster in self.clusters.values():
                 cluster.remove_node(node)
-            
+
             self.nodes.remove(node)
             self.adjacency.pop(node, None)
-    
+
     def add_edge(self, edge: Edge):
         """Add an edge to the graph.
         
@@ -219,11 +219,11 @@ class Graph(BaseModel):
         # Ensure nodes exist in graph
         self.add_node(edge.source)
         self.add_node(edge.target)
-        
+
         self.edges.add(edge)
         self.adjacency[edge.source].add(edge)
-        
-    
+
+
     def remove_edge(self, edge: Edge):
         """Remove an edge from the graph.
         
@@ -233,7 +233,7 @@ class Graph(BaseModel):
         if edge in self.edges:
             self.edges.remove(edge)
             self.adjacency[edge.source].discard(edge)
-    
+
     def add_cluster(self, cluster: Cluster):
         """Add a cluster to the graph.
         
@@ -246,7 +246,7 @@ class Graph(BaseModel):
         # Add all cluster nodes to graph
         for node in cluster.nodes:
             self.add_node(node)
-    
+
     def remove_cluster(self, cluster_name: str):
         """Remove a cluster from the graph.
         
@@ -254,8 +254,8 @@ class Graph(BaseModel):
             cluster_name: Name of the cluster to remove
         """
         self.clusters.pop(cluster_name, None)
-    
-    def get_edges_from(self, node: Node) -> Set[Edge]:
+
+    def get_edges_from(self, node: Node) -> set[Edge]:
         """Get all edges originating from a node.
         
         Args:
@@ -265,7 +265,7 @@ class Graph(BaseModel):
             Set[Edge]: All edges with this node as source
         """
         return self.adjacency.get(node, set()).copy()
-    
+
     def node_count(self) -> int:
         """Get the total number of nodes in the graph.
         
@@ -273,7 +273,7 @@ class Graph(BaseModel):
             int: Number of nodes
         """
         return len(self.nodes)
-    
+
     def edge_count(self) -> int:
         """Get the total number of edges in the graph.
         
@@ -281,7 +281,7 @@ class Graph(BaseModel):
             int: Number of edges
         """
         return len(self.edges)
-    
+
     def cluster_count(self) -> int:
         """Get the total number of clusters in the graph.
         
@@ -289,29 +289,29 @@ class Graph(BaseModel):
             int: Number of clusters
         """
         return len(self.clusters)
-    
+
     def __str__(self):
         return f"Graph({self.name})"
-    
+
     def __repr__(self):
         return (f"Graph(name='{self.name}', direction='{self.direction}', nodes={self.node_count()}, "
                 f"edges={self.edge_count()}, clusters={self.cluster_count()})")
-    
+
     @field_serializer('nodes')
-    def serialize_nodes(self, nodes_set: Set[Node]):
+    def serialize_nodes(self, nodes_set: set[Node]):
         """Serialize the nodes set to a list for JSON compatibility."""
         return [node.model_dump() for node in nodes_set]
-    
+
     @field_serializer('edges')
-    def serialize_edges(self, edges_set: Set[Edge]):
+    def serialize_edges(self, edges_set: set[Edge]):
         """Serialize the edges set to a list for JSON compatibility."""
         return [edge.model_dump() for edge in edges_set]
-    
+
     @field_serializer('clusters')
-    def serialize_clusters(self, clusters_dict: Dict[str, Cluster]):
+    def serialize_clusters(self, clusters_dict: dict[str, Cluster]):
         """Serialize the clusters dict with proper serialization."""
         return {k: v.model_dump() for k, v in clusters_dict.items()}
-    
+
     def to_diagrams(self):
         """Convert graph to diagrams library format for rendering.
         
@@ -322,14 +322,16 @@ class Graph(BaseModel):
             Diagram: Configured diagrams.Diagram object ready for rendering
         """
         import importlib
-        from diagrams import Diagram, Cluster as DiagramsCluster
-        
+
+        from diagrams import Cluster as DiagramsCluster
+        from diagrams import Diagram
+
         # Create diagram with direction
         with Diagram(self.name, direction=self.direction.value if isinstance(self.direction, Direction) else self.direction, show=False) as diagram:
             # Dictionary to store created nodes for edge connections
             diagram_nodes = {}
             cluster_nodes = {}
-            
+
             # Create clusters first
             for cluster_name, cluster in self.clusters.items():
                 with DiagramsCluster(cluster_name):
@@ -342,7 +344,7 @@ class Graph(BaseModel):
                         diagram_node = node_class(label)
                         diagram_nodes[node.id] = diagram_node
                         cluster_nodes[node.id] = diagram_node
-            
+
             # Create standalone nodes (not in clusters)
             for node in self.nodes:
                 if node.id not in diagram_nodes:
@@ -353,12 +355,12 @@ class Graph(BaseModel):
                     label = node.display_name or node.id
                     diagram_node = node_class(label)
                     diagram_nodes[node.id] = diagram_node
-            
+
             # Create edges/connections
             for edge in self.edges:
                 source_node = diagram_nodes[edge.source.id]
                 target_node = diagram_nodes[edge.target.id]
-                
+
                 match (edge.forward, edge.reverse):
                     case (True, True):
                         # Bidirectional - create Edge with both directions
@@ -368,10 +370,10 @@ class Graph(BaseModel):
                         # Forward direction
                         source_node >> target_node
                     case (False, True):
-                        # Reverse direction  
+                        # Reverse direction
                         source_node << target_node
                     case (False, False):
                         # No direction
                         source_node - target_node
-        
+
         return diagram

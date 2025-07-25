@@ -57,3 +57,8 @@ warn_return_any = true
 warn_unused_configs = true
 disallow_untyped_defs = true
 strict_optional = true
+
+[dependency-groups]
+dev = [
+    "ruff>=0.12.4",
+]

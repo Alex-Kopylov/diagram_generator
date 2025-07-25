@@ -5,24 +5,34 @@ This agent uses native tools for diagram generation, implementing a workflow
 with separate planner and executor nodes orchestrated by a StateGraph.
 """
 
-import time
 import base64
-from typing import Dict, Any, Optional, Sequence
-from typing_extensions import TypedDict, Annotated
-from langgraph.graph import StateGraph, START, END
+import time
+from collections.abc import Sequence
+from typing import Annotated, Any
+
+from langchain.chat_models import init_chat_model
+from langchain_core.messages import (
+    AIMessage,
+    BaseMessage,
+    HumanMessage,
+    SystemMessage,
+)
+from langchain_core.runnables import RunnableConfig
+from langgraph.graph import END, START, StateGraph
 from langgraph.graph.message import add_messages
 from langgraph.prebuilt import ToolNode
-from langchain_core.runnables import RunnableConfig
-
-from langchain_core.messages import HumanMessage, SystemMessage, AIMessage, ToolMessage, BaseMessage
-from pydantic import BaseModel, Field
 from loguru import logger
+from pydantic import BaseModel, Field
+from typing_extensions import TypedDict
 
-from tools.graph_tools import ALL_GRAPH_TOOLS, PLANNER_TOOLS, EXECUTOR_TOOLS, generate_diagram
-from core.graph_structure import Graph
-from agents.prompts import DIAGRAM_PLANNER_PROMPT, DIAGRAM_EXECUTOR_PROMPT
+from agents.prompts import DIAGRAM_EXECUTOR_PROMPT, DIAGRAM_PLANNER_PROMPT
 from config.settings import get_settings
-from langchain.chat_models import init_chat_model
+from core.graph_structure import Graph
+from tools.graph_tools import (
+    EXECUTOR_TOOLS,
+    PLANNER_TOOLS,
+    generate_diagram,
+)
 
 settings = get_settings()
 
@@ -30,13 +40,13 @@ settings = get_settings()
 class PlannerState(TypedDict):
     """State for the planner React agent."""
     messages: Annotated[Sequence[BaseMessage], add_messages]
-    plan: Optional[str]
+    plan: str | None
 
 
 class ExecutorState(TypedDict):
     """State for the executor React agent."""
     messages: Annotated[Sequence[BaseMessage], add_messages]
-    graph: Optional[Graph]
+    graph: Graph | None
 
 
 class DiagramState(BaseModel):
@@ -54,22 +64,22 @@ class DiagramState(BaseModel):
         file_path: Path to generated diagram file
     """
     message: str = Field(..., description="Original user message describing the diagram")
-    plan: Optional[str] = Field(None, description="Generated execution plan from the planner")
-    result: Optional[str] = Field(None, description="Final result from the executor")
-    graph: Optional[Graph] = Field(None, description="Graph object created by executor")
-    diagram_result: Optional[Dict[str, Any]] = Field(None, description="Final diagram generation result")
+    plan: str | None = Field(None, description="Generated execution plan from the planner")
+    result: str | None = Field(None, description="Final result from the executor")
+    graph: Graph | None = Field(None, description="Graph object created by executor")
+    diagram_result: dict[str, Any] | None = Field(None, description="Final diagram generation result")
     success: bool = Field(..., description="Whether the workflow completed successfully")
-    error: Optional[str] = Field(None, description="Error message if workflow failed")
-    file_path: Optional[str] = Field(None, description="Path to generated diagram file")
+    error: str | None = Field(None, description="Error message if workflow failed")
+    file_path: str | None = Field(None, description="Path to generated diagram file")
 
 
 class DiagramGenerationResult(BaseModel):
     """Result of diagram generation process."""
     success: bool = Field(..., description="Whether diagram generation succeeded")
     message: str = Field(..., description="Success or error message")
-    file_path: Optional[str] = Field(None, description="Path to generated diagram file")
-    bytestring_base64: Optional[str] = Field(None, description="Generated diagram as base64 encoded string")
-    graph_data: Optional[Graph] = Field(None, description="Graph data used for diagram")
+    file_path: str | None = Field(None, description="Path to generated diagram file")
+    bytestring_base64: str | None = Field(None, description="Generated diagram as base64 encoded string")
+    graph_data: Graph | None = Field(None, description="Graph data used for diagram")
 
 
 # React Agent Helper Functions
@@ -85,15 +95,15 @@ def create_executor_tools_node():
     def executor_tool_node(state: ExecutorState) -> ExecutorState:
         """Execute executor tool calls and store graph if build_graph is called."""
         # Use ToolNode to handle the actual tool execution
-        tool_node = ToolNode(EXECUTOR_TOOLS)  
+        tool_node = ToolNode(EXECUTOR_TOOLS)
         tool_result = tool_node.invoke({"messages": state["messages"]})
-        
+
         # Start with the tool result and preserve the existing state
         updated_state = {
             "messages": tool_result["messages"],
             "graph": state.get("graph")  # Preserve existing graph
         }
-        
+
         # Check if any graph-building tool was called and extract the graph
         last_message = state["messages"][-1]
         if hasattr(last_message, 'tool_calls') and last_message.tool_calls:
@@ -123,16 +133,16 @@ def create_executor_tools_node():
                                     case "create_empty_graph":
                                         from tools.graph_tools import create_empty_graph
                                         graph_result = create_empty_graph.invoke(tool_call["args"])
-                                
+
                                 updated_state["graph"] = graph_result
                                 logger.info(f"Graph stored in executor state from {tool_call['name']}: {graph_result.name} with {len(graph_result.nodes)} nodes")
                                 break
                             except Exception as e:
                                 logger.error(f"Failed to extract graph from {tool_call['name']} call: {e}")
                                 logger.debug(f"Tool call args: {tool_call['args']}")
-        
+
         return updated_state
-    
+
     return executor_tool_node
 
 
@@ -145,11 +155,11 @@ def should_continue_planner(state: PlannerState):
 def should_continue_executor(state: ExecutorState):
     """Decide whether to continue or end the executor."""
     last_message = state["messages"][-1]
-    
+
     # If no tool calls, we're done
     if not last_message.tool_calls:
         return "end"
-    
+
     # If build_graph was called, we should stop after executing it
     for tool_call in last_message.tool_calls:
         if tool_call["name"] == "build_graph":
@@ -157,7 +167,7 @@ def should_continue_executor(state: ExecutorState):
             # If graph is already built, we should end
             if state.get("graph") is not None:
                 return "end"
-    
+
     return "continue"
 
 
@@ -170,11 +180,11 @@ def create_planner_agent_node():
             init_chat_model(model=settings.fallback_model_name, temperature=settings.temperature, api_key=settings.fallback_model_api_key)
         ])
         llm = llm.bind_tools(PLANNER_TOOLS)
-        
+
         # Invoke model with current messages
         response = llm.invoke(state["messages"], config)
         return {"messages": [response]}
-    
+
     return planner_agent
 
 
@@ -187,11 +197,11 @@ def create_executor_agent_node():
                     init_chat_model(model=settings.fallback_model_name, temperature=settings.temperature, api_key=settings.fallback_model_api_key)
                 ])
         llm = llm.bind_tools(EXECUTOR_TOOLS)
-        
+
         # Invoke model with current messages
         response = llm.invoke(state["messages"], config)
         return {"messages": [response]}
-    
+
     return executor_agent
 
 
@@ -211,17 +221,17 @@ def planner_node(state: DiagramState) -> DiagramState:
     try:
         # Create planner React agent
         planner_workflow = StateGraph(PlannerState)
-        
+
         # Add nodes
         planner_agent_node = create_planner_agent_node()
         planner_tools_node = create_planner_tools_node()
-        
+
         planner_workflow.add_node("agent", planner_agent_node)
         planner_workflow.add_node("tools", planner_tools_node)
-        
+
         # Set entry point
         planner_workflow.set_entry_point("agent")
-        
+
         # Add conditional edges
         planner_workflow.add_conditional_edges(
             "agent",
@@ -232,14 +242,14 @@ def planner_node(state: DiagramState) -> DiagramState:
             }
         )
         planner_workflow.add_edge("tools", "agent")
-        
+
         # Compile the planner agent
         planner_agent = planner_workflow.compile()
-        
+
         # Prepare initial state
         prompt_content = f"Create a detailed plan for: {state.message}"
         logger.info(f"LLM Call - Model: {settings.model_name}, Temperature: {settings.temperature}, Agent: planner, Prompt: {prompt_content}")
-        
+
         initial_state = PlannerState(
             messages=[
                 SystemMessage(content=DIAGRAM_PLANNER_PROMPT),
@@ -247,11 +257,11 @@ def planner_node(state: DiagramState) -> DiagramState:
             ],
             plan=None
         )
-        
+
         # Execute the planner agent
         start_time = time.time()
         final_state = planner_agent.invoke(initial_state, {"recursion_limit": 70})
-        
+
         # Extract plan from final messages
         plan = "No plan generated"
         if final_state["messages"]:
@@ -260,13 +270,13 @@ def planner_node(state: DiagramState) -> DiagramState:
                 if isinstance(msg, AIMessage) and msg.content and not msg.tool_calls:
                     plan = msg.content
                     break
-        
+
         logger.info(f"Planner completed with plan: {plan[:100]}...")
-        
+
         state.plan = plan
         state.success = True
         return state
-        
+
     except Exception as e:
         logger.exception(f"LLM Error - Model: {settings.model_name}, Agent: planner, Error: {str(e)}, Prompt: Create a detailed plan for: {state.message}")
         logger.error(f"Planning failed: {str(e)}")
@@ -293,20 +303,20 @@ def executor_node(state: DiagramState) -> DiagramState:
             state.success = False
             state.error = "No plan available for execution"
             return state
-        
+
         # Create executor React agent
         executor_workflow = StateGraph(ExecutorState)
-        
+
         # Add nodes
         executor_agent_node = create_executor_agent_node()
         executor_tools_node = create_executor_tools_node()
-        
+
         executor_workflow.add_node("agent", executor_agent_node)
         executor_workflow.add_node("tools", executor_tools_node)
-        
+
         # Set entry point
         executor_workflow.set_entry_point("agent")
-        
+
         # Add conditional edges
         executor_workflow.add_conditional_edges(
             "agent",
@@ -317,13 +327,13 @@ def executor_node(state: DiagramState) -> DiagramState:
             }
         )
         executor_workflow.add_edge("tools", "agent")
-        
+
         executor_agent = executor_workflow.compile()
-        
+
         # Prepare initial state
         prompt_content = f"Execute this plan and MUST end with build_graph: {state.plan}"
         logger.info(f"LLM Call - Model: {settings.model_name}, Temperature: {settings.temperature}, Agent: executor, Prompt: {prompt_content}")
-        
+
         initial_state = ExecutorState(
             messages=[
                 SystemMessage(content=DIAGRAM_EXECUTOR_PROMPT),
@@ -331,11 +341,11 @@ def executor_node(state: DiagramState) -> DiagramState:
             ],
             graph=None
         )
-        
+
         # Execute the executor agent
         start_time = time.time()
         final_state = executor_agent.invoke(initial_state, {"recursion_limit": 50})
-        
+
         # Extract result and graph from final state
         result_message = "Execution completed"
         if final_state["messages"]:
@@ -344,25 +354,25 @@ def executor_node(state: DiagramState) -> DiagramState:
                 if isinstance(msg, AIMessage) and msg.content:
                     result_message = msg.content
                     break
-        
+
         # Get the built graph from final state
         built_graph = final_state.get("graph")
-        
+
         if built_graph:
             state.graph = built_graph
             logger.info(f"Graph successfully built by executor: {built_graph.name} with {len(built_graph.nodes)} nodes")
         else:
             logger.warning("No graph was built during execution")
             # Don't create an empty graph here - let graph_builder_node handle the error
-        
+
         state.result = result_message
         state.success = True
-        
+
         duration_ms = (time.time() - start_time) * 1000
         logger.info(f"Executor completed plan execution in {duration_ms:.2f}ms")
-        
+
         return state
-        
+
     except Exception as e:
         logger.exception(f"LLM Error - Model: {settings.model_name}, Agent: executor, Error: {str(e)}, Prompt: Execute this plan: {state.plan if state.plan else 'No plan'}")
         logger.error(f"Execution failed: {str(e)}")
@@ -391,18 +401,18 @@ def graph_builder_node(state: DiagramState) -> DiagramState:
             state.success = False
             state.error = "No graph available for diagram generation"
             return state
-        
+
         # Generate diagram by calling the tool with proper input
         diagram_result = generate_diagram.invoke({
             "graph": state.graph,
             "output_file": state.file_path
         })
-        
+
         # Update state with complete diagram generation results
         state.diagram_result = diagram_result.model_dump()
         state.file_path = diagram_result.file_path
         state.success = diagram_result.success
-        
+
         if not diagram_result.success:
             state.error = diagram_result.error
             logger.error(f"Diagram generation failed: {diagram_result.error}")
@@ -411,9 +421,9 @@ def graph_builder_node(state: DiagramState) -> DiagramState:
             if not state.result:
                 state.result = f"Diagram generated successfully: {diagram_result.file_path}"
             logger.info(f"Diagram generated successfully: {diagram_result.file_path}")
-        
+
         return state
-        
+
     except Exception as e:
         logger.exception(f"Graph builder failed: {str(e)}")
         state.success = False
@@ -427,7 +437,7 @@ class DiagramAgent:
     
     This agent orchestrates planner and executor nodes using a StateGraph workflow.
     """
-    
+
     def __init__(self, model_name: str = settings.model_name, temperature: float = settings.temperature):
         """
         Initialize the diagram generation agent.
@@ -438,10 +448,10 @@ class DiagramAgent:
         """
         self.model_name = model_name
         self.temperature = temperature
-        
+
         # Build the LangGraph workflow
         self.workflow = self._build_workflow()
-    
+
     def _build_workflow(self):
         """
         Build the LangGraph workflow with planner and executor nodes.
@@ -451,22 +461,22 @@ class DiagramAgent:
         """
         # Create the workflow
         workflow = StateGraph(DiagramState)
-        
+
         # Add nodes
         workflow.add_node("planner", planner_node)
         workflow.add_node("executor", executor_node)
         workflow.add_node("graph_builder", graph_builder_node)
-        
+
         # Define edges
         workflow.add_edge(START, "planner")
         workflow.add_edge("planner", "executor")
         workflow.add_edge("executor", "graph_builder")
         workflow.add_edge("graph_builder", END)
-        
+
         # Compile the workflow
         return workflow.compile()
-    
-    async def generate_diagram(self, message: str, output_file: Optional[str] = None) -> DiagramGenerationResult:
+
+    async def generate_diagram(self, message: str, output_file: str | None = None) -> DiagramGenerationResult:
         """
         Generate a diagram from a natural language description using the workflow.
         Acts as orchestrator - passes args to workflow and returns output from nodes.
@@ -480,7 +490,7 @@ class DiagramAgent:
         """
         logger.info(f"Starting diagram generation for message: {message}")
         workflow_start_time = time.time()
-        
+
         try:
             # Initialize state
             initial_state = DiagramState(
@@ -493,13 +503,13 @@ class DiagramAgent:
                 error=None,
                 file_path=output_file,
             )
-            
+
             # Execute the workflow
             final_state = await self.workflow.ainvoke(initial_state)
-            
+
             workflow_duration_ms = (time.time() - workflow_start_time) * 1000
             logger.info(f"Diagram generation workflow completed in {workflow_duration_ms:.2f}ms")
-            
+
             # Extract results from final state (post-processing handled by graph_builder_node)
             bytestring_base64_data = None
             if final_state["diagram_result"] and final_state["diagram_result"].get("bytestring"):
@@ -507,7 +517,7 @@ class DiagramAgent:
                 bytestring_data = final_state["diagram_result"]["bytestring"]
                 if bytestring_data:
                     bytestring_base64_data = base64.b64encode(bytestring_data).decode('utf-8')
-            
+
             return DiagramGenerationResult(
                 success=final_state["success"],
                 message=final_state["result"] or final_state["error"] or "Workflow completed",
@@ -515,11 +525,11 @@ class DiagramAgent:
                 bytestring_base64=bytestring_base64_data,
                 graph_data=final_state["graph"]
             )
-            
+
         except Exception as e:
             workflow_duration_ms = (time.time() - workflow_start_time) * 1000
             logger.exception(f"Diagram generation workflow failed after {workflow_duration_ms:.2f}ms: {str(e)}")
-            
+
             return DiagramGenerationResult(
                 success=False,
                 message=f"Diagram generation workflow failed: {str(e)}",
@@ -527,8 +537,8 @@ class DiagramAgent:
                 bytestring_base64=None,
                 graph_data=None
             )
-    
-    async def chat(self, message: str, session_id: Optional[str] = None) -> str:
+
+    async def chat(self, message: str, session_id: str | None = None) -> str:
         """
         Handle conversational interactions using the workflow.
         
@@ -544,7 +554,7 @@ class DiagramAgent:
             result = await self.generate_diagram(message)
             logger.info(f"Chat interaction completed successfully for session_id: {session_id}")
             return result.message
-            
+
         except Exception as e:
             logger.error(f"Chat interaction failed for session_id: {session_id}: {str(e)}")
             return f"Error in chat: {str(e)}"

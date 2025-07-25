@@ -4,24 +4,23 @@ LangGraph tools for diagram generation.
 This module provides native LangGraph tools for direct graph construction.
 """
 
-from typing import Any, Dict, List, Optional, Union
-import os
-import sys
-import pkgutil
 import importlib
 import inspect
+import pkgutil
+from typing import Any
+
 from langchain_core.tools import tool
-from pydantic import BaseModel, Field
 from loguru import logger
+from pydantic import BaseModel, Field
 
 # Import graph structures - create a local copy to avoid external dependencies
-from core.graph_structure import Node, Edge, Cluster, Graph, Direction
+from core.graph_structure import Cluster, Direction, Edge, Graph, Node
 
 
 class ValidationResult(BaseModel):
     """Graph validation result schema."""
     valid: bool = Field(..., description="Whether the graph is valid")
-    errors: List[str] = Field(..., description="List of validation errors")
+    errors: list[str] = Field(..., description="List of validation errors")
 
 
 class DiagramResult(BaseModel):
@@ -32,8 +31,8 @@ class DiagramResult(BaseModel):
     error: str | None = Field(None, description="Error message if generation failed")
 
 
-@tool(return_direct=True) 
-def create_node(path: str, display_name: Optional[str] = None, id: Optional[str] = None) -> Node:
+@tool(return_direct=True)
+def create_node(path: str, display_name: str | None = None, id: str | None = None) -> Node:
     """Create a new graph node.
     
     Args:
@@ -66,19 +65,19 @@ def create_edge(source_id: str, target_id: str, forward: bool = False, reverse: 
     # Create dummy nodes for edge creation
     source_node = Node(path="temp", id=source_id)
     target_node = Node(path="temp", id=target_id)
-    
+
     edge = Edge(
         source=source_node,
         target=target_node,
         forward=forward,
         reverse=reverse
     )
-    
+
     return edge
 
 
 @tool(return_direct=True)
-def create_cluster(name: str, node_ids: List[str]) -> Cluster:
+def create_cluster(name: str, node_ids: list[str]) -> Cluster:
     """Create a cluster containing specified nodes.
     
     Args:
@@ -112,7 +111,7 @@ def create_empty_graph(name: str, direction: Direction = Direction.LEFT_RIGHT) -
 
 
 @tool(return_direct=True)
-def build_graph(name: str, direction: Direction, nodes: List[Node], edges: List[Union[Edge, Dict[str, Any]]], clusters: Optional[List[Union[Cluster, Dict[str, Any]]]] = None) -> Graph:
+def build_graph(name: str, direction: Direction, nodes: list[Node], edges: list[Edge | dict[str, Any]], clusters: list[Cluster | dict[str, Any]] | None = None) -> Graph:
     """Build a complete graph from components.
     
     Args:
@@ -126,17 +125,17 @@ def build_graph(name: str, direction: Direction, nodes: List[Node], edges: List[
         Graph: Complete graph object
     """
     logger.debug(f"Building graph: name={name}, nodes={len(nodes)}, edges={len(edges)}")
-    
+
     # Create graph
     graph = Graph(name=name, direction=direction)
-    
+
     # Create and add nodes
     node_map = {}
     for node in nodes:
         graph.add_node(node)
         node_map[node.id] = node
         logger.debug(f"Added node to graph: {node.id}")
-    
+
     # Create and add edges
     for edge_data in edges:
         if isinstance(edge_data, dict) and "source_id" in edge_data:
@@ -155,9 +154,9 @@ def build_graph(name: str, direction: Direction, nodes: List[Node], edges: List[
         else:
             # Handle dict objects as full edge data
             edge = Edge.model_validate(edge_data)
-        
+
         graph.add_edge(edge)
-    
+
     # Create and add clusters
     if clusters:
         for cluster_data in clusters:
@@ -173,14 +172,14 @@ def build_graph(name: str, direction: Direction, nodes: List[Node], edges: List[
             else:
                 # Handle dict objects as full cluster data
                 cluster = Cluster.model_validate(cluster_data)
-            
+
             graph.add_cluster(cluster)
-    
+
     logger.info(f"Graph built successfully: {graph.name} with {len(graph.nodes)} nodes, {len(graph.edges)} edges")
     return graph
 
 
-@tool(return_direct=True) 
+@tool(return_direct=True)
 def add_node_to_graph(graph: Graph, node: Node) -> Graph:
     """Add a single node to an existing graph.
     
@@ -197,7 +196,7 @@ def add_node_to_graph(graph: Graph, node: Node) -> Graph:
 
 
 @tool(return_direct=True)
-def add_edge_to_graph(graph: Graph, edge: Union[Edge, Dict[str, Any]]) -> Graph:
+def add_edge_to_graph(graph: Graph, edge: Edge | dict[str, Any]) -> Graph:
     """Add a single edge to an existing graph.
     
     Args:
@@ -230,12 +229,12 @@ def add_edge_to_graph(graph: Graph, edge: Union[Edge, Dict[str, Any]]) -> Graph:
     else:
         graph.add_edge(edge)
         logger.info(f"Added edge to graph: {graph.name}")
-    
+
     return graph
 
 
 @tool(return_direct=True)
-def add_to_graph(graph: Graph, nodes: Optional[List[Node]] = None, edges: Optional[List[Union[Edge, Dict[str, Any]]]] = None, clusters: Optional[List[Union[Cluster, Dict[str, Any]]]] = None) -> Graph:
+def add_to_graph(graph: Graph, nodes: list[Node] | None = None, edges: list[Edge | dict[str, Any]] | None = None, clusters: list[Cluster | dict[str, Any]] | None = None) -> Graph:
     """Add components to an existing graph.
     
     Args:
@@ -248,16 +247,16 @@ def add_to_graph(graph: Graph, nodes: Optional[List[Node]] = None, edges: Option
         Graph: Updated graph object
     """
     logger.debug(f"Adding to graph: nodes={len(nodes or [])}, edges={len(edges or [])}")
-    
+
     # Create node map for existing nodes
     node_map = {node.id: node for node in graph.nodes}
-    
+
     # Add new nodes
     if nodes:
         for node in nodes:
             graph.add_node(node)
             node_map[node.id] = node
-    
+
     # Add new edges
     if edges:
         for edge_data in edges:
@@ -275,9 +274,9 @@ def add_to_graph(graph: Graph, nodes: Optional[List[Node]] = None, edges: Option
                 edge = edge_data
             else:
                 edge = Edge.model_validate(edge_data)
-            
+
             graph.add_edge(edge)
-    
+
     # Add new clusters
     if clusters:
         for cluster_data in clusters:
@@ -291,9 +290,9 @@ def add_to_graph(graph: Graph, nodes: Optional[List[Node]] = None, edges: Option
                 cluster = cluster_data
             else:
                 cluster = Cluster.model_validate(cluster_data)
-            
+
             graph.add_cluster(cluster)
-    
+
     logger.info(f"Components added to graph successfully: {graph.name}")
     return graph
 
@@ -309,9 +308,9 @@ def validate_graph(graph: Graph) -> ValidationResult:
         ValidationResult: Validation result with errors if any
     """
     logger.debug("Validating graph structure")
-    
+
     errors = []
-    
+
     # Check for orphaned edges
     node_ids = {node.id for node in graph.nodes}
     for edge in graph.edges:
@@ -319,26 +318,26 @@ def validate_graph(graph: Graph) -> ValidationResult:
             errors.append(f"Edge references non-existent source node: {edge.source.id}")
         if edge.target.id not in node_ids:
             errors.append(f"Edge references non-existent target node: {edge.target.id}")
-    
+
     # Check cluster nodes exist
     for cluster_name, cluster in graph.clusters.items():
         for node in cluster.nodes:
             if node.id not in node_ids:
                 errors.append(f"Cluster '{cluster_name}' references non-existent node: {node.id}")
-    
+
     result = ValidationResult(valid=len(errors) == 0, errors=errors)
     if result.valid:
         logger.info("Graph validation successful")
     else:
         logger.warning(f"Graph validation failed with {len(errors)} errors: {errors}")
-    
+
     return result
 
 
 
 
 @tool(return_direct=True)
-def generate_diagram(graph: Graph, output_file: Optional[str] = None) -> DiagramResult:
+def generate_diagram(graph: Graph, output_file: str | None = None) -> DiagramResult:
     """Generate diagram file from graph.
     
     Args:
@@ -350,25 +349,25 @@ def generate_diagram(graph: Graph, output_file: Optional[str] = None) -> Diagram
     """
     try:
         logger.debug(f"Generating diagram, output_file={output_file}")
-        
+
         # Generate diagram using the existing to_diagrams method
         diagram = graph.to_diagrams()
-        
+
         # Determine output file name
         if not output_file:
             output_file = f"{graph.name.lower().replace(' ', '_')}.png"
-        
+
         logger.info(f"Diagram generated successfully: {output_file}")
         return DiagramResult(success=True, file_path=output_file, error=None,
                              bytestring=diagram._repr_png_())
-    
+
     except Exception as e:
         logger.exception(f"Diagram generation failed: {str(e)}")
         return DiagramResult(success=False, file_path=None, error=str(e), bytestring=None)
 
 
 @tool(return_direct=True)
-def list_all_providers() -> List[str]:
+def list_all_providers() -> list[str]:
     """List all available cloud providers in the diagrams package.
     
     Returns:
@@ -377,10 +376,10 @@ def list_all_providers() -> List[str]:
     try:
         import diagrams
         providers = []
-        
+
         # Get the diagrams package path
         diagrams_path = diagrams.__path__
-        
+
         # Walk through all modules in diagrams package
         for importer, modname, ispkg in pkgutil.iter_modules(diagrams_path):
             # Skip __init__ and other special modules
@@ -392,18 +391,18 @@ def list_all_providers() -> List[str]:
                         providers.append(modname)
                 except ImportError:
                     continue
-        
+
         providers.sort()
         logger.info(f"Found {len(providers)} providers: {providers}")
         return providers
-        
+
     except Exception as e:
         logger.exception(f"Failed to list providers: {str(e)}")
         return []
 
 
 @tool(return_direct=True)
-def list_resources_by_provider(provider: str) -> List[str]:
+def list_resources_by_provider(provider: str) -> list[str]:
     """List all resource categories for a specific provider.
     
     Args:
@@ -415,20 +414,20 @@ def list_resources_by_provider(provider: str) -> List[str]:
     try:
         provider = provider.lower()
         resources = []
-        
+
         # Import the provider module
         provider_module = importlib.import_module(f'diagrams.{provider}')
-        
+
         if hasattr(provider_module, '__path__'):
             # Walk through all submodules in the provider
             for importer, modname, ispkg in pkgutil.iter_modules(provider_module.__path__):
                 if not modname.startswith('_'):
                     resources.append(modname)
-        
+
         resources.sort()
         logger.info(f"Found {len(resources)} resources for {provider}: {resources}")
         return resources
-        
+
     except ImportError:
         logger.exception(f"Provider '{provider}' not found")
         return []
@@ -438,7 +437,7 @@ def list_resources_by_provider(provider: str) -> List[str]:
 
 
 @tool(return_direct=True)
-def list_nodes_by_resource(provider: str, resource: str) -> List[str]:
+def list_nodes_by_resource(provider: str, resource: str) -> list[str]:
     """List all available node classes for a specific provider and resource category.
     
     Args:
@@ -452,21 +451,21 @@ def list_nodes_by_resource(provider: str, resource: str) -> List[str]:
         provider = provider.lower()
         resource = resource.lower()
         nodes = []
-        
+
         # Import the specific resource module
         module_name = f'diagrams.{provider}.{resource}'
         resource_module = importlib.import_module(module_name)
-        
+
         # Get all classes from the module
         for name, obj in inspect.getmembers(resource_module, inspect.isclass):
             # Only include classes defined in this module (not imported ones)
             if obj.__module__ == module_name and not name.startswith('_'):
                 nodes.append(name)
-        
+
         nodes.sort()
         logger.info(f"Found {len(nodes)} nodes for {provider}.{resource}: {nodes}")
         return nodes
-        
+
     except ImportError:
         logger.exception(f"Resource '{provider}.{resource}' not found")
         return []
@@ -476,7 +475,7 @@ def list_nodes_by_resource(provider: str, resource: str) -> List[str]:
 
 
 @tool(return_direct=True)
-def validate_node_exists(path: str) -> Dict[str, Any]:
+def validate_node_exists(path: str) -> dict[str, Any]:
     """Validate if a specific node class exists in the diagrams package.
     
     Args:
@@ -490,20 +489,20 @@ def validate_node_exists(path: str) -> Dict[str, Any]:
         parts = path.split('.')
         if len(parts) < 4 or parts[0] != 'diagrams':
             return {
-                "exists": False, 
+                "exists": False,
                 "error": f"Invalid path format. Expected 'diagrams.provider.resource.NodeClass', got '{path}'",
                 "alternatives": []
             }
-        
+
         provider = parts[1].lower()
         resource = parts[2].lower()
         node_class = parts[3]
-        
+
         # Try to import the module and check if the class exists
         module_name = f'diagrams.{provider}.{resource}'
         try:
             resource_module = importlib.import_module(module_name)
-            
+
             # Check if the specific class exists
             if hasattr(resource_module, node_class):
                 logger.info(f"Node class validated: {path}")
@@ -518,14 +517,14 @@ def validate_node_exists(path: str) -> Dict[str, Any]:
                 for name, obj in inspect.getmembers(resource_module, inspect.isclass):
                     if obj.__module__ == module_name and not name.startswith('_'):
                         alternatives.append(f"diagrams.{provider}.{resource}.{name}")
-                
+
                 logger.warning(f"Node class '{node_class}' not found in {module_name}. Available: {alternatives}")
                 return {
                     "exists": False,
                     "error": f"Node class '{node_class}' not found in '{module_name}'",
                     "alternatives": alternatives[:5]  # Limit to 5 alternatives
                 }
-                
+
         except ImportError:
             logger.warning(f"Module '{module_name}' not found")
             return {
@@ -533,7 +532,7 @@ def validate_node_exists(path: str) -> Dict[str, Any]:
                 "error": f"Module '{module_name}' not found",
                 "alternatives": []
             }
-            
+
     except Exception as e:
         logger.exception(f"Failed to validate node {path}: {str(e)}")
         return {
