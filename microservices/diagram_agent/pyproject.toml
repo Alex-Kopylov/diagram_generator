@@ -1,0 +1,54 @@
+[project]
+name = "diagram-agent"
+version = "0.1.0"
+description = "LangGraph-based diagram generation agent"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "fastapi>=0.104.1",
+    "uvicorn[standard]>=0.24.0",
+    "langgraph>=0.2.0",
+    "langchain-openai>=0.1.0",
+    "langchain-core>=0.3.0",
+    "pydantic>=2.5.0",
+    "pydantic-settings>=2.0.0",
+    "loguru>=0.7.2",
+    "python-multipart>=0.0.6",
+    "tenacity>=8.2.0",
+    "diagrams>=0.24.0",
+    "langgraph-cli[inmem]>=0.3.6",
+    "langchain[anthropic,langchain-openai]>=0.3.27",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.4.3",
+    "pytest-asyncio>=0.21.1",
+    "pytest-cov>=4.1.0",
+    "httpx>=0.25.2",
+    "ruff>=0.1.7",
+    "mypy>=1.7.1",
+]
+
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+include = ["diagram_agent*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py", "*_test.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+
+[tool.ruff]
+target-version = "py311"
+line-length = 88
+
+
+[dependency-groups]
+dev = [
+    "ruff>=0.12.4",
+]

@@ -1,0 +1,26 @@
+# Python-generated files
+__pycache__/
+*.py[oc]
+build/
+dist/
+wheels/
+*.egg-info
+
+# Virtual environments
+.venv
+
+# IDE settings
+.vscode/
+
+.history/
+.obsidian/
+.claude/
+microservices/diagram_agent/.langgraph_api/.langgraph_checkpoint.1.pckl
+microservices/diagram_agent/.langgraph_api/.langgraph_checkpoint.2.pckl
+microservices/diagram_agent/.langgraph_api/.langgraph_checkpoint.3.pckl
+microservices/diagram_agent/.langgraph_api/.langgraph_ops.pckl
+microservices/diagram_agent/.langgraph_api/.langgraph_retry_counter.pckl
+microservices/diagram_agent/.langgraph_api/store.pckl
+microservices/diagram_agent/.langgraph_api/store.vectors.pckl
+microservices/diagram_agent/logs/diagram_agent.log
+microservices/diagram_agent/.env
