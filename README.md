@@ -176,7 +176,8 @@ def should_continue_planner(state: PlannerState):
 ✅ **Custom Diagrams Tools**: 14 native tools for graph construction and validation  
 ✅ **LLM Integration**: OpenAI GPT models with Anthropic Claude fallback  
 ✅ **Visible Prompt Logic**: No opaque framework calls.
-⭐ **Multiple Node Types**: Support all of them.
+
+⭐ **Multiple Node Types**: Support all of them!
 
 ---
 
