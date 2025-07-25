@@ -138,9 +138,8 @@ def executor_node(state: DiagramState) -> DiagramState:
             HumanMessage(content=prompt_content)
         ]
         
-        # Execute with automatic tool calls
+        # Use LangGraph's prebuilt create_react_agent for proper tool execution
         from langgraph.prebuilt import create_react_agent
-        from langchain_core.tools import Tool
         
         # Create a simple executor that will run tools and return the final graph
         graph_result = None
@@ -198,16 +197,13 @@ def graph_builder_node(state: DiagramState) -> DiagramState:
             state.error = "No graph available for diagram generation"
             return state
         
-        # Call generate_diagram tool directly
+        # Generate diagram by calling the tool with proper input
         from tools.graph_tools import GenerateDiagramInput
-        
         diagram_input = GenerateDiagramInput(
             graph=state.graph,
             output_file=state.file_path
         )
-        
-        # Generate diagram
-        diagram_result = generate_diagram(diagram_input)
+        diagram_result = generate_diagram.invoke(diagram_input.model_dump())
         
         # Update state with diagram result
         state.diagram_result = diagram_result.model_dump()

@@ -96,7 +96,7 @@ class ListNodesByResourceInput(BaseModel):
     resource: str = Field(..., description="Resource category (e.g., 'compute', 'database', 'network')")
 
 
-@tool(args_schema=CreateNodeInput) 
+@tool(args_schema=CreateNodeInput, return_direct=True) 
 def create_node(input: CreateNodeInput) -> Node:
     """Create a new graph node.
     
@@ -112,7 +112,7 @@ def create_node(input: CreateNodeInput) -> Node:
         return Node(name=input.name)
 
 
-@tool(args_schema=CreateEdgeInput)
+@tool(args_schema=CreateEdgeInput, return_direct=True)
 def create_edge(input: CreateEdgeInput) -> Edge:
     """Create a new graph edge between nodes.
     
@@ -136,7 +136,7 @@ def create_edge(input: CreateEdgeInput) -> Edge:
     return edge
 
 
-@tool(args_schema=CreateClusterInput)
+@tool(args_schema=CreateClusterInput, return_direct=True)
 def create_cluster(input: CreateClusterInput) -> Cluster:
     """Create a cluster containing specified nodes.
     
@@ -152,7 +152,7 @@ def create_cluster(input: CreateClusterInput) -> Cluster:
     return cluster
 
 
-@tool(args_schema=BuildGraphInput)
+@tool(args_schema=BuildGraphInput, return_direct=True)
 def build_graph(input: BuildGraphInput) -> Graph:
     """Build a complete graph from components.
     
@@ -217,7 +217,7 @@ def build_graph(input: BuildGraphInput) -> Graph:
     return graph
 
 
-@tool(args_schema=AddToGraphInput)
+@tool(args_schema=AddToGraphInput, return_direct=True)
 def add_to_graph(input: AddToGraphInput) -> Graph:
     """Add components to an existing graph.
     
@@ -281,7 +281,7 @@ def add_to_graph(input: AddToGraphInput) -> Graph:
     return graph
 
 
-@tool(args_schema=ValidateGraphInput)
+@tool(args_schema=ValidateGraphInput, return_direct=True)
 def validate_graph(input: ValidateGraphInput) -> ValidationResult:
     """Validate graph structure and connections.
     
@@ -321,7 +321,7 @@ def validate_graph(input: ValidateGraphInput) -> ValidationResult:
 
 
 
-@tool(args_schema=GenerateDiagramInput)
+@tool(args_schema=GenerateDiagramInput, return_direct=True)
 def generate_diagram(input: GenerateDiagramInput) -> DiagramResult:
     """Generate diagram file from graph.
     
@@ -349,10 +349,10 @@ def generate_diagram(input: GenerateDiagramInput) -> DiagramResult:
     
     except Exception as e:
         logger.exception(f"Diagram generation failed: {str(e)}")
-        return DiagramResult(success=False, file_path=None, error=str(e))
+        return DiagramResult(success=False, file_path=None, error=str(e), bytestring=None)
 
 
-@tool
+@tool(return_direct=True)
 def list_all_providers() -> List[str]:
     """List all available cloud providers in the diagrams package.
     
@@ -387,7 +387,7 @@ def list_all_providers() -> List[str]:
         return []
 
 
-@tool(args_schema=ListResourcesByProviderInput)
+@tool(args_schema=ListResourcesByProviderInput, return_direct=True)
 def list_resources_by_provider(input: ListResourcesByProviderInput) -> List[str]:
     """List all resource categories for a specific provider.
     
@@ -422,7 +422,7 @@ def list_resources_by_provider(input: ListResourcesByProviderInput) -> List[str]
         return []
 
 
-@tool(args_schema=ListNodesByResourceInput)
+@tool(args_schema=ListNodesByResourceInput, return_direct=True)
 def list_nodes_by_resource(input: ListNodesByResourceInput) -> List[str]:
     """List all available node classes for a specific provider and resource category.
     
