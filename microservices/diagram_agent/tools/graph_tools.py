@@ -33,20 +33,21 @@ class DiagramResult(BaseModel):
 
 
 @tool(return_direct=True) 
-def create_node(name: str, id: Optional[str] = None) -> Node:
+def create_node(path: str, display_name: Optional[str] = None, id: Optional[str] = None) -> Node:
     """Create a new graph node.
     
     Args:
-        name: Node name (e.g., 'diagrams.aws.compute.EC2')
+        path: Path to diagrams class (e.g., 'diagrams.aws.compute.EC2')
+        display_name: Optional human-readable name for the node
         id: Optional custom node ID
         
     Returns:
         Node: Created node object
     """
     if id:
-        return Node(name=name, id=id)
+        return Node(path=path, display_name=display_name, id=id)
     else:
-        return Node(name=name)
+        return Node(path=path, display_name=display_name)
 
 
 @tool(return_direct=True)
@@ -63,8 +64,8 @@ def create_edge(source_id: str, target_id: str, forward: bool = False, reverse: 
         Edge: Created edge object
     """
     # Create dummy nodes for edge creation
-    source_node = Node(name="temp", id=source_id)
-    target_node = Node(name="temp", id=target_id)
+    source_node = Node(path="temp", id=source_id)
+    target_node = Node(path="temp", id=target_id)
     
     edge = Edge(
         source=source_node,
@@ -94,7 +95,24 @@ def create_cluster(name: str, node_ids: List[str]) -> Cluster:
 
 
 @tool(return_direct=True)
-def build_graph(name: str, direction: Direction, nodes: List[Node], edges: List[Union[Edge, Dict[str, Any]]], clusters: Optional[List[Union[Cluster, Dict[str, Any]]]] = None) -> Graph:
+def create_empty_graph(name: str, direction: Direction = Direction.LEFT_RIGHT) -> Graph:
+    """Create an empty graph structure.
+    
+    Args:
+        name: Graph name
+        direction: Graph layout direction
+        
+    Returns:
+        Graph: Empty graph object
+    """
+    logger.debug(f"Creating empty graph: name={name}, direction={direction}")
+    graph = Graph(name=name, direction=direction)
+    logger.info(f"Empty graph created: {graph.name}")
+    return graph
+
+
+@tool(return_direct=True)
+def build_graph(name: str, direction: Direction, nodes: List[Node], edges: List[Union[Edge, Dict[str, Any]]], clusters: Optional[List[Union[Cluster, Dict[str, Any]]]] = None) -> str:
     """Build a complete graph from components.
     
     Args:
@@ -159,6 +177,60 @@ def build_graph(name: str, direction: Direction, nodes: List[Node], edges: List[
             graph.add_cluster(cluster)
     
     logger.info(f"Graph built successfully: {graph.name} with {len(graph.nodes)} nodes, {len(graph.edges)} edges")
+    return graph.model_dump_json()
+
+
+@tool(return_direct=True) 
+def add_node_to_graph(graph: Graph, node: Node) -> Graph:
+    """Add a single node to an existing graph.
+    
+    Args:
+        graph: Existing graph object
+        node: Node to add
+        
+    Returns:
+        Graph: Updated graph object
+    """
+    graph.add_node(node)
+    logger.info(f"Added node {node.id} to graph: {graph.name}")
+    return graph
+
+
+@tool(return_direct=True)
+def add_edge_to_graph(graph: Graph, edge: Union[Edge, Dict[str, Any]]) -> Graph:
+    """Add a single edge to an existing graph.
+    
+    Args:
+        graph: Existing graph object
+        edge: Edge to add
+        
+    Returns:
+        Graph: Updated graph object
+    """
+    if isinstance(edge, dict):
+        # Handle edge data with node IDs - need to find actual nodes
+        node_map = {node.id: node for node in graph.nodes}
+        if "source_id" in edge and "target_id" in edge:
+            source_node = node_map.get(edge["source_id"])
+            target_node = node_map.get(edge["target_id"])
+            if source_node and target_node:
+                edge_obj = Edge(
+                    source=source_node,
+                    target=target_node,
+                    forward=edge.get("forward", False),
+                    reverse=edge.get("reverse", False)
+                )
+                graph.add_edge(edge_obj)
+                logger.info(f"Added edge {edge['source_id']} -> {edge['target_id']} to graph: {graph.name}")
+        else:
+            # Handle full edge data
+            edge_obj = Edge.model_validate(edge)
+            graph.add_edge(edge_obj)
+            logger.info(f"Added edge to graph: {graph.name}")
+    else:
+        graph.add_edge(edge)
+        logger.info(f"Added edge to graph: {graph.name}")
+    
     return graph
 
 
@@ -415,6 +487,9 @@ EXECUTOR_TOOLS = [
     create_node,
     create_edge,
     create_cluster,
+    create_empty_graph,
+    add_node_to_graph,
+    add_edge_to_graph,
     add_to_graph,
     validate_graph,
     build_graph
@@ -425,6 +500,9 @@ ALL_GRAPH_TOOLS = [
     create_node,
     create_edge,
     create_cluster,
+    create_empty_graph,
+    add_node_to_graph,
+    add_edge_to_graph,
     build_graph,
     add_to_graph,
     validate_graph,

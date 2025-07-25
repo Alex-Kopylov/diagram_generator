@@ -62,25 +62,35 @@ Available Tools (Creation Only):
 - create_node: Create system components using diagrams.{provider}.{resource}.{NodeClass} format
 - create_edge: Connect components with directional relationships
 - create_cluster: Create logical groupings of components
-- add_to_graph: Add components to an existing graph
+- create_empty_graph: Start with an empty graph structure
+- add_node_to_graph: Add a single node to an existing graph
+- add_edge_to_graph: Add a single edge to an existing graph  
+- add_to_graph: Add multiple nodes, edges, and clusters to an existing graph
 - validate_graph: Validate graph structure and connections
-- build_graph: Assemble all nodes, edges, and clusters into final graph structure
+- build_graph: Assemble all nodes, edges, and clusters into final graph structure (use when you have all components)
 
 Execution Guidelines:
 - Follow the plan step by step systematically
-- Create all nodes first, then clusters, then edges
+- Use INCREMENTAL APPROACH: Start with create_empty_graph, then use add_to_graph to build incrementally
+- Create individual components first, then add them to the graph
 - Use exact provider.resource.NodeClass specifications from the plan
 - Ensure nodes exist before connecting them with edges
-- Add nodes to clusters as specified in the plan
-- CRITICAL: Always call build_graph at the end to create the final graph structure
-- Store the resulting graph data for the diagram generator
+- CRITICAL: Always end with a graph that has been properly built and stored
 
-Execution Pattern:
+Recommended Execution Pattern (INCREMENTAL - EASIEST):
+1. Call create_empty_graph(name="Graph Name") - this creates and stores the initial graph
+2. Create a node: create_node(name="diagrams.aws.compute.EC2") 
+3. Add it: add_node_to_graph(graph=<previous_graph>, node=<created_node>)
+4. Create an edge: create_edge(source_id="node1", target_id="node2")
+5. Add it: add_edge_to_graph(graph=<current_graph>, edge=<created_edge>)
+6. Repeat steps 2-5 for all components
+7. Each add_*_to_graph call updates and stores the graph automatically
+
+Alternative Pattern (BATCH):
 1. Create all nodes using create_node
 2. Create all clusters using create_cluster  
 3. Create all edges using create_edge
 4. Call build_graph with all components to create final graph
-5. Store graph data in state for next node
 
 Error Handling:
 - If a node type doesn't exist, try similar alternatives
